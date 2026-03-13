@@ -117,11 +117,13 @@ filesets:
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
-    - hw/vendor/openhwgroup_cv32e20/bhv/cve2_sim_clock_gate.sv #as for now use the simulation clk gating
+    - hw/asic/sky130/core_v_mini_mcu_synth_wrap.sv
+    - hw/vendor/openhwgroup_cv32e20/rtl/cve2_clock_gate.sv
     - hw/vendor/openhwgroup_cv32e40p/bhv/cv32e40p_sim_clock_gate.sv
     - hw/vendor/pulp_platform_tech_cells_generic/src/deprecated/pulp_clk_cells.sv #as for now use the simulation clk cells
     - hw/vendor/pulp_platform_tech_cells_generic/src/deprecated/cluster_clk_cells.sv #as for now use the simulation clk cells
     - hw/vendor/pulp_platform_tech_cells_generic/src/rtl/tc_clk.sv #as for now use the simulation clk cells
+    - hw/vendor/pulp_platform_gpio/src/gpio_input_stage.sv
     file_type: systemVerilogSource
 
   lib-sky130:
@@ -588,6 +590,42 @@ targets:
       openroad:
         flow_path: flow/OpenROAD-flow-scripts/flow
         make_target: synth
+
+  pickle:
+    <<: *default_target
+    default_tool: morty
+    description: Pickle of file with Morty
+    parameters:
+    filesets_append:
+      - rtl-sky130
+    tools:
+      morty:
+        morty_options:
+          - "--strip-comments"
+          - "-D"
+          - "SYNTHESIS" 
+          - "-o"
+          - "core_v_mini_mcu-pickled.sv"
+          - "--top"
+          - "core_v_mini_mcu_synth_wrap"
+          - "-I"
+          - "../src/lowrisc_prim_assert_0.1/rtl"
+          - "-I"
+          - "../src/lowrisc_prim_util_memload_0/rtl"
+          - "-I"
+          - "../src/lowrisc_dv_dv_fcov_macros_0"
+          - "-I"
+          - "../src/pulp-platform.org__common_cells_1.38.0/include"
+          - "-I"
+          - "../src/pulp-platform.org__register_interface_0/pulp_platform_register_interface/include"
+          - "-I"
+          - "../src/pulp-platform.org__axi_0.39.8/include"
+          - "-I"
+          - "../src/openhwgroup_cve2_cve2_core_0.1/rtl"
+          - "-I"
+          - "../src/x-heep_ip_dma_0/data"
+          - "-I"
+          - "../src/pulp-platform.org__serial_link_0/pulp_platform_serial_link/src/axis/include"
 
 # Generators
 generators:
