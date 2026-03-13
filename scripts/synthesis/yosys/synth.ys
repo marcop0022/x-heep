@@ -1,0 +1,24 @@
+plugin -i slang
+
+read_verilog -lib hw/asic/sky130/sky130_sram_stub.v
+
+read_slang \
+  --top core_v_mini_mcu_synth_wrap \
+  --allow-use-before-declare \
+  --blackboxed-module sky130_sram_4kbyte_1rw_32x1024_8 \
+  build/openhwgroup.org_systems_core-v-mini-mcu_1.0.4/pickle-morty/core_v_mini_mcu-pickled.sv
+
+hierarchy -check -top core_v_mini_mcu_synth_wrap
+
+proc
+opt
+fsm
+opt
+memory
+opt
+
+synth -top core_v_mini_mcu_synth_wrap
+
+clean
+
+write_verilog core_v_mini_mcu_synth.v
