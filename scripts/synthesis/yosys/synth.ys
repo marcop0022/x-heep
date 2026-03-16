@@ -1,6 +1,6 @@
 plugin -i slang
 
-read_verilog -lib hw/asic/sky130/sky130_sram_stub.v
+read_liberty -lib hw/asic/sky130/sky130_sram_4kbyte_1rw_32x1024_8_TT_1p8V_25C.lib
 
 read_slang \
   --top core_v_mini_mcu_synth_wrap \
