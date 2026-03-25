@@ -1,14 +1,18 @@
 plugin -i slang
 
-read_liberty -lib hw/asic/sky130/sky130_sram_4kbyte_1rw_32x1024_8_TT_1p8V_25C.lib
-
+read_liberty -lib hw/asic/ihp130/pdk/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_256x32_c2_bm_bist_typ_1p20V_25C.lib
+read_liberty -lib hw/asic/ihp130/pdk/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_512x32_c2_bm_bist_typ_1p20V_25C.lib
+read_liberty -lib hw/asic/ihp130/pdk/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x32_c2_bm_bist_typ_1p20V_25C.lib
+read_liberty -lib hw/asic/ihp130/pdk/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_8192x32_c4_typ_1p20V_25C.lib
+read_liberty -lib hw/asic/ihp130/pdk/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+read_liberty -lib hw/asic/ihp130/pdk/ihp-sg13g2/libs.ref/sg13g2_io/lib/sg13g2_io_typ_1p2V_3p3V_25C.lib
 read_slang \
-  --top core_v_mini_mcu_synth_wrap \
+  --top asic_x_heep_system_wrapper \
   --allow-use-before-declare \
-  --blackboxed-module sky130_sram_4kbyte_1rw_32x1024_8 \
-  build/openhwgroup.org_systems_core-v-mini-mcu_1.0.4/pickle-morty/core_v_mini_mcu-pickled.sv
+  --keep-hierarchy \
+  build/openhwgroup.org_systems_core-v-mini-mcu_1.0.4/pickle-morty/x_heep_system_pickled.sv
 
-hierarchy -check -top core_v_mini_mcu_synth_wrap
+hierarchy -check -top asic_x_heep_system_wrapper
 
 proc
 opt
@@ -17,8 +21,8 @@ opt
 memory
 opt
 
-synth -top core_v_mini_mcu_synth_wrap
+synth -top asic_x_heep_system_wrapper
 
 clean
 
-write_verilog core_v_mini_mcu_synth.v
+write_verilog asic_x_heep_system.v

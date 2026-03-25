@@ -61,7 +61,6 @@ filesets:
     depend:
     - pulp-platform.org::tech_cells_generic
     files:
-    - hw/simulation/sram_wrapper.sv
     - hw/simulation/pad_cell_bypass_input.sv
     - hw/simulation/pad_cell_bypass_output.sv
     - hw/simulation/pad_cell_inout.sv
@@ -117,13 +116,20 @@ filesets:
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
-    - hw/asic/sky130/core_v_mini_mcu_synth_wrap.sv
+    - hw/asic/asic_x_heep_system_wrapper.sv
     - hw/vendor/openhwgroup_cv32e20/rtl/cve2_clock_gate.sv
     - hw/vendor/openhwgroup_cv32e40p/bhv/cv32e40p_sim_clock_gate.sv
     - hw/vendor/pulp_platform_tech_cells_generic/src/deprecated/pulp_clk_cells.sv #as for now use the simulation clk cells
     - hw/vendor/pulp_platform_tech_cells_generic/src/deprecated/cluster_clk_cells.sv #as for now use the simulation clk cells
     - hw/vendor/pulp_platform_tech_cells_generic/src/rtl/tc_clk.sv #as for now use the simulation clk cells
     - hw/vendor/pulp_platform_gpio/src/gpio_input_stage.sv
+    file_type: systemVerilogSource
+
+  rtl-ihp130:
+    depend:
+    - polito::prim-ihp130
+    files:
+    - hw/asic/asic_x_heep_system_wrapper.sv
     file_type: systemVerilogSource
 
   lib-sky130:
@@ -597,7 +603,8 @@ targets:
     description: Pickle of file with Morty
     parameters:
     filesets_append:
-      - rtl-sky130
+      - rtl-ihp130
+      - x_heep_system
     tools:
       morty:
         morty_options:
@@ -605,9 +612,9 @@ targets:
           - "-D"
           - "SYNTHESIS" 
           - "-o"
-          - "core_v_mini_mcu-pickled.sv"
+          - "x_heep_system_pickled.sv"
           - "--top"
-          - "core_v_mini_mcu_synth_wrap"
+          - "asic_x_heep_system_wrapper"
           - "-I"
           - "../src/lowrisc_prim_assert_0.1/rtl"
           - "-I"
