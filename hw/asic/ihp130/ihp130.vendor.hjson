@@ -25,6 +25,9 @@
     "README.md",
     "requirements.txt",
     "versions.txt",
+    "ihp-sg13g2/libs.doc",
+    "ihp-sg13g2/libs.qa",
+    "ihp-sg13g2/libs.tech",
   ]
 
 }
