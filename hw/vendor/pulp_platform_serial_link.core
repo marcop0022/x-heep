@@ -28,7 +28,6 @@ filesets:
     - pulp_platform_serial_link/src/serial_link_data_link.sv
     - pulp_platform_serial_link/src/serial_link.sv
     file_type: systemVerilogSource
-
 targets:
   default:
     filesets:
