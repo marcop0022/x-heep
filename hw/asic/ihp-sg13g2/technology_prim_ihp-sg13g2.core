@@ -28,3 +28,5 @@ targets:
     filesets:
       - target_asic_yosys_synthesis ? (pdk_std_cells)
       - target_asic_yosys_synthesis ? (pdk_io_cells)
+      - target_asic_yosys_sim_netlist ? (pdk_std_cells)
+      - target_asic_yosys_sim_netlist ? (pdk_io_cells)
