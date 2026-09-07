@@ -104,11 +104,14 @@ yosys dfflibmap -liberty $stdcell_lib
 yosys abc -liberty $stdcell_lib
 
 # Gate-level simulation hygiene: drive every undriven / undefined bit to 0 so
-# the netlist does not start the simulation stuck at X. `-init` also rewrites the
-# `1'x` bits some RTL FSMs carry in their power-on `init` attribute, otherwise
-# `clean` aborts on "conflicting init values" once those nets become constant 0.
-# (PnR does this later in its own flow; the sim netlist must be self-contained.)
-yosys setundef -zero -undriven -init
+# the netlist does not start the simulation stuck at X.
+yosys setundef -zero -undriven
+
+# Drop the power-on `init` attributes. After dfflegalize every flop is a
+# resettable sg13g2_dfrbpq_1 and the testbench asserts reset, so the `1'x` init
+# some RTL FSMs carry is redundant -- and it makes `clean -purge` abort with
+# "Conflicting init values" as soon as those nets are tied to a constant.
+yosys setattr -unset init
 
 yosys clean -purge
 
