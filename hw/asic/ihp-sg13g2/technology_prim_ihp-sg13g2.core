@@ -10,8 +10,9 @@ description: "IHP-SG13G2 technology-specific primitive wrappers (clock cells, SR
 filesets:
   pdk_std_cells:
     files:
-      - rtl/cells/prim_ihp_sg13g2_clk.sv       # technology clock cells (gating/inv/mux)
-      - rtl/cells/sram_wrapper_ihp_sg13g2.sv   # wrapper around the RM_IHPSG13_1P_* SRAM macros
+      - rtl/cells/ihp_sg13g2_blackbox_stubs.sv  # black-box stubs for the hard cells (no PDK views)
+      - rtl/cells/prim_ihp_sg13g2_clk.sv        # technology clock cells (gating/inv/mux)
+      - rtl/cells/sram_wrapper_ihp_sg13g2.sv    # wrapper around the RM_IHPSG13_1P_* SRAM macros
     file_type: systemVerilogSource
 
   pdk_io_cells:

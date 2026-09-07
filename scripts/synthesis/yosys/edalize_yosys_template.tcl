@@ -15,10 +15,10 @@ yosys -import
 echo on
 
 # Pull in $top and $name (the edalize output basename) from the generated procs file.
-# The file also defines a `synth` wrapper proc that would shadow the built-in command;
-# drop it so plain `synth` still reaches the yosys built-in below.
+# It also defines a `proc synth` that shadows the yosys `synth` command in the Tcl
+# interpreter; we sidestep that by invoking every yosys pass with the `yosys` prefix
+# (which goes straight to yosys' command dispatch, not the Tcl proc).
 source edalize_yosys_procs.tcl
-catch {rename synth synth_edalize_unused}
 
 # Read the whole RTL through slang.
 # fusesoc/edalize does not forward the `parameters` vlogdefines to a custom template,
@@ -48,10 +48,12 @@ read_slang --top $top \
 #   dfflibmap -liberty <path>/sg13g2_stdcell_typ_1p20V_25C.lib
 #   abc       -liberty <path>/sg13g2_stdcell_typ_1p20V_25C.lib
 #   clean
-synth -top $top -flatten
+yosys synth -top $top -flatten
 
-# Netlist under the name expected by the X-HEEP ASIC flow ...
-write_verilog -noattr asic_x_heep_system.v
+# Human-readable name for the X-HEEP ASIC flow ...
+yosys write_verilog -noattr asic_x_heep_system.v
 
-# ... and under the canonical name the edalize `yosys` backend expects as its build target.
-write_verilog -noattr $name.v
+# ... and the names the edalize `yosys` backend may expect as its Make target
+# (differs between edalize versions: <edam-name>.v vs <edam-name>.verilog).
+yosys write_verilog -noattr $name.v
+yosys write_verilog -noattr $name.verilog
