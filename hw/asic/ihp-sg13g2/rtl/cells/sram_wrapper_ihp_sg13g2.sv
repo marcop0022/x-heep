@@ -100,19 +100,58 @@ module sram_wrapper #(
                 );
             end
             // Used by the w25q128jw flash controller LLC cache (N_SETS*SECTOR_SIZE_WORDS = 4*1024).
-            // TODO: confirm this macro name against the IHP-SG13G2 PDK SRAM set; kept as a black box
-            //       for the Yosys generic-synthesis flow (no Liberty mapping yet).
-            4096: begin
+
+            // The IHP-SG13G2 PDK SRAM set has no 4096x32 single-port cut, so this bank is
+            // built from two 2048x32 macros selected by the top address bit. This is
+            // equivalent to a single 4096x32 macro: each access enables only the addressed
+            // half (A_MEN gated by the select bit), and the read-data mux uses the select
+            // bit delayed by one cycle to match the SRAM read latency.
+            
+            4096: begin : gen_sram_4096_split
+                logic        bank_sel;
+                logic        bank_sel_q;
+                logic [31:0] rdata_lo, rdata_hi;
+
+                assign bank_sel = addr_i[11];
+
+                always_ff @(posedge clk_i or negedge rst_ni) begin
+                    if (!rst_ni) bank_sel_q <= 1'b0;
+                    else if (req_i) bank_sel_q <= bank_sel;
+                end
+
+                assign rdata_o = bank_sel_q ? rdata_hi : rdata_lo;
+
                 (* keep, blackbox *)
-                RM_IHPSG13_1P_4096x32_c4_bm_bist sram_inst (
+                RM_IHPSG13_1P_2048x32_c2_bm_bist sram_inst_lo (
                     .A_CLK      (clk_i),
-                    .A_MEN      (req_i),
+                    .A_MEN      (req_i & ~bank_sel),
                     .A_WEN      (we_i),
                     .A_REN      (!we_i),
-                    .A_ADDR     (addr_i),
+                    .A_ADDR     (addr_i[10:0]),
                     .A_DIN      (wdata_i),
                     .A_DLY      (1'b1),
-                    .A_DOUT     (rdata_o),
+                    .A_DOUT     (rdata_lo),
+                    .A_BM       ({{8{be_i[3]}}, {8{be_i[2]}}, {8{be_i[1]}}, {8{be_i[0]}}}),
+                    .A_BIST_CLK (1'b0),
+                    .A_BIST_EN  (1'b0),
+                    .A_BIST_MEN (1'b0),
+                    .A_BIST_WEN (1'b0),
+                    .A_BIST_REN (1'b0),
+                    .A_BIST_ADDR('0),
+                    .A_BIST_DIN ('0),
+                    .A_BIST_BM  ('0)
+                );
+
+                (* keep, blackbox *)
+                RM_IHPSG13_1P_2048x32_c2_bm_bist sram_inst_hi (
+                    .A_CLK      (clk_i),
+                    .A_MEN      (req_i & bank_sel),
+                    .A_WEN      (we_i),
+                    .A_REN      (!we_i),
+                    .A_ADDR     (addr_i[10:0]),
+                    .A_DIN      (wdata_i),
+                    .A_DLY      (1'b1),
+                    .A_DOUT     (rdata_hi),
                     .A_BM       ({{8{be_i[3]}}, {8{be_i[2]}}, {8{be_i[1]}}, {8{be_i[0]}}}),
                     .A_BIST_CLK (1'b0),
                     .A_BIST_EN  (1'b0),
