@@ -99,6 +99,10 @@ foreach spine {
 	yosys setattr -mod -set keep_hierarchy 1 "$spine*"
 }
 
+# Drop SVA / formal helper cells ($check, $assert, ...): they are not real
+# hardware and a simulator would choke on the `$check` cells write_verilog emits.
+yosys chformal -remove
+
 yosys synth -top $top -flatten
 yosys dfflibmap -liberty $stdcell_lib
 yosys abc -liberty $stdcell_lib
