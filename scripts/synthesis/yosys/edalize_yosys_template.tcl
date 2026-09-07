@@ -42,13 +42,49 @@ read_slang --top $top \
 # primitives (sg13g2_* std cells / IO pads, RM_IHPSG13_1P_* SRAM macros) as
 # black boxes, so `synth` does not error on their missing definitions.
 
-# Generic synthesis. Standard-cell technology mapping is intentionally left out for now:
-# the IHP-SG13G2 cells (sg13g2_*) and SRAM macros (RM_IHPSG13_1P_*) stay as black boxes.
-# Once the Liberty files are available, add below:
-#   dfflibmap -liberty <path>/sg13g2_stdcell_typ_1p20V_25C.lib
-#   abc       -liberty <path>/sg13g2_stdcell_typ_1p20V_25C.lib
-#   clean
-yosys synth -top $top -flatten
+# Standard-cell technology mapping is gated on the `IHP130` environment variable.
+#   - IHP130 set  -> it must point to the IHP-SG13G2 PDK root (the directory that
+#                    contains `libs.ref/`, or its parent). The Liberty views of the
+#                    std cells and SRAM macros are loaded, and the netlist is mapped
+#                    onto real sg13g2_* cells. Output is PDK-derived: keep it private.
+#   - IHP130 unset -> generic netlist, PDK cells (sg13g2_*, RM_IHPSG13_1P_*) stay as
+#                    black boxes. Safe to run / push publicly (no PDK data in the output).
+if {[info exists ::env(IHP130)] && $::env(IHP130) ne ""} {
+	set ihp130_root $::env(IHP130)
+
+	# Locate libs.ref/ (accept either the PDK root or its ihp-sg13g2/ subdir).
+	set libs_ref ""
+	foreach cand [list $ihp130_root/libs.ref $ihp130_root/ihp-sg13g2/libs.ref] {
+		if {[file isdirectory $cand]} { set libs_ref $cand; break }
+	}
+	if {$libs_ref eq ""} {
+		error "IHP130 is set to '$ihp130_root' but no libs.ref/ directory was found under it."
+	}
+
+	set stdcell_lib $libs_ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
+	if {![file exists $stdcell_lib]} {
+		error "IHP130 std-cell Liberty not found: $stdcell_lib"
+	}
+
+	# Load the cell interfaces + timing before mapping. `-lib` = no netlists,
+	# `-overwrite` replaces the placeholder black-box stubs read from SystemVerilog.
+	puts "\[x-heep] IHP130 set: reading Liberty from $libs_ref"
+	yosys read_liberty -lib -overwrite $stdcell_lib
+
+	# SRAM macros: read every typ-corner Liberty the PDK ships (blackbox, timing only).
+	foreach sram_lib [lsort [glob -nocomplain $libs_ref/sg13g2_sram/lib/*_typ_1p20V_25C.lib]] {
+		puts "\[x-heep] SRAM Liberty: $sram_lib"
+		yosys read_liberty -lib -overwrite $sram_lib
+	}
+
+	yosys synth -top $top -flatten
+	yosys dfflibmap -liberty $stdcell_lib
+	yosys abc -liberty $stdcell_lib
+	yosys clean
+} else {
+	puts "\[x-heep] IHP130 not set: generic synthesis, PDK cells left as black boxes."
+	yosys synth -top $top -flatten
+}
 
 # Human-readable name for the X-HEEP ASIC flow ...
 yosys write_verilog -noattr asic_x_heep_system.v
