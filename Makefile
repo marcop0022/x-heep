@@ -333,6 +333,12 @@ asic:
 yosys-ihp130:
 	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildyosys.log
 
+## Runs a standalone Yosys synthesis of X-HEEP producing a HIERARCHICAL (non-flattened)
+## netlist for post-synthesis (gate-level) simulation. Requires IHP130 to point at the PDK.
+## The netlist is written to the fusesoc build dir as asic_x_heep_system_sim.v.
+yosys-ihp130-sim:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_sim_netlist openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildyosys-sim.log
+
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 
 ## Read the id from the EPFL_Programmer flash

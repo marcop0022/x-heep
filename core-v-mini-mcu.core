@@ -599,3 +599,23 @@ targets:
         arch: generic
         output_format: verilog
         yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_template.tcl
+
+  asic_yosys_sim_netlist:
+    <<: *default_target
+    default_tool: yosys
+    description: Hierarchical Yosys netlist of X-HEEP for post-synthesis (gate-level) simulation
+    parameters:
+      - SYNTHESIS=true
+      - REMOVE_OBI_FIFO
+    filesets_append:
+      - x_heep_system
+      - ip-asic-ihp
+    hooks:
+      pre_build:
+        - generate_yosys_filelist
+    toplevel: [asic_x_heep_system_wrapper]
+    tools:
+      yosys:
+        arch: generic
+        output_format: verilog
+        yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_sim_template.tcl
