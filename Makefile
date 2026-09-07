@@ -328,11 +328,10 @@ vivado-fpga-remote-pgm:
 asic:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=asic_synthesis $(FUSESOC_FLAGS) --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee builddesigncompiler.log
 
-openroad-sky130:
-	git checkout hw/vendor/pulp_platform/common_cells/*
-	sed -i 's/(\*[^\n]*\*)//g' hw/vendor/pulp_platform/common_cells/src/*.sv
-	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis --flag=use_sky130 openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildopenroad.log
-	git checkout hw/vendor/pulp_platform/common_cells/*
+## Runs a standalone Yosys synthesis of X-HEEP targeting the IHP-SG13G2 technology.
+## The netlist is written to the fusesoc build dir as asic_x_heep_system.v (and yosys.v).
+yosys-ihp130:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildyosys.log
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 

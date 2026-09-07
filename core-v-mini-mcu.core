@@ -100,6 +100,13 @@ filesets:
     depend:
     - technology::prim_mytech
 
+  ip-asic-ihp:
+    depend:
+    - technology::prim_ihp-sg13g2
+    files:
+    - hw/asic/ihp-sg13g2/rtl/asic_x_heep_system_wrapper.sv
+    file_type: systemVerilogSource
+
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
@@ -277,6 +284,12 @@ scripts:
     cmd:
     - python
     - ../../../scripts/sim/vcs/patch_vcs_ams_Makefile.py
+
+  # ASIC synthesis utils
+  generate_yosys_filelist:
+    cmd:
+    - sh
+    - ../../../scripts/synthesis/yosys/generate_yosys_filelist.sh
 
   # Simulation utils
   remove_uart_log:
@@ -569,19 +582,20 @@ targets:
 
   asic_yosys_synthesis:
     <<: *default_target
-    default_tool: openroad
-    description: yosys
+    default_tool: yosys
+    description: Standalone Yosys synthesis of X-HEEP targeting the IHP-SG13G2 technology
     parameters:
       - SYNTHESIS=true
-      - VERILATOR=true
       - REMOVE_OBI_FIFO
     filesets_append:
-      - use_sky130? (rtl-sky130)
-      - lib-sky130
-      - openroad_base_files
-      - openroad_sky130_files
-    toplevel: [core_v_mini_mcu]
+      - x_heep_system
+      - ip-asic-ihp
+    hooks:
+      pre_build:
+        - generate_yosys_filelist
+    toplevel: [asic_x_heep_system_wrapper]
     tools:
-      openroad:
-        flow_path: flow/OpenROAD-flow-scripts/flow
-        make_target: synth
+      yosys:
+        arch: generic
+        output_format: verilog
+        yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_template.tcl
