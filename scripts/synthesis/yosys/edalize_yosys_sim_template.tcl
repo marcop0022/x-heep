@@ -1,10 +1,10 @@
 # Yosys template for the X-HEEP post-synthesis (gate-level) SIMULATION netlist.
 #
 # This is a sibling of `edalize_yosys_template.tcl` (the PnR flow). The key
-# difference is that this flow does NOT flatten the design: the module
-# hierarchy is preserved so the simulation testbench can still reach into the
-# netlist with hierarchical paths (firmware backdoor into the SRAM arrays,
-# EXIT detection on soc_ctrl, waveform navigation by subsystem).
+# difference is a PARTIAL flatten: a small "spine" of modules is kept as
+# hierarchy so the simulation testbench can still reach into the netlist with
+# hierarchical paths (firmware backdoor into the SRAM arrays, EXIT detection on
+# soc_ctrl); everything else is flattened as in the PnR flow.
 #
 # Invoked by the edalize `yosys` backend from the `asic_yosys_sim_netlist`
 # target. The `generate_yosys_filelist` pre_build hook produces `files.flist`
@@ -75,15 +75,40 @@ foreach sram_lib [lsort [glob -nocomplain $libs_ref/sg13g2_sram/lib/*_typ_1p20V_
 	yosys read_liberty -lib -overwrite $sram_lib
 }
 
-# Synthesise WITHOUT -flatten: keep the module hierarchy for the testbench.
-yosys synth -top $top
+# Partial flatten: keep only the module "spine" the simulation testbench reaches
+# into with hierarchical paths, and flatten everything else (CPU, DMA, crossbars,
+# peripherals) into it. Full -flatten would break the testbench backdoor; full
+# keep-hierarchy runs ABC once per module (hundreds of times) and is very slow.
+# This keeps ~a handful of ABC runs while preserving:
+#   x_heep_system_i.core_v_mini_mcu_i.memory_subsystem_i.ram*_i.<sram>       (firmware load)
+#   x_heep_system_i.core_v_mini_mcu_i.ao_peripheral_subsystem_i.soc_ctrl_i.* (EXIT detect)
+# Add more base names below if you need to probe/force deeper at gate level.
+yosys hierarchy -top $top
+
+# yosys-slang's --keep-hierarchy uniquifies module names as "<base>$<instance path>",
+# so match the spine modules by base-name prefix. `flatten` (run by `synth -flatten`)
+# skips any module carrying the keep_hierarchy attribute.
+foreach spine {
+	x_heep_system
+	core_v_mini_mcu
+	memory_subsystem
+	sram_wrapper
+	ao_peripheral_subsystem
+	soc_ctrl
+} {
+	yosys setattr -mod -set keep_hierarchy 1 "$spine*"
+}
+
+yosys synth -top $top -flatten
 yosys dfflibmap -liberty $stdcell_lib
 yosys abc -liberty $stdcell_lib
 
 # Gate-level simulation hygiene: drive every undriven / undefined bit to 0 so
-# the netlist does not start the simulation stuck at X. (PnR does this later in
-# its own flow; the sim netlist must be self-contained.)
-yosys setundef -zero -undriven
+# the netlist does not start the simulation stuck at X. `-init` also rewrites the
+# `1'x` bits some RTL FSMs carry in their power-on `init` attribute, otherwise
+# `clean` aborts on "conflicting init values" once those nets become constant 0.
+# (PnR does this later in its own flow; the sim netlist must be self-contained.)
+yosys setundef -zero -undriven -init
 
 yosys clean -purge
 
