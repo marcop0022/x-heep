@@ -292,11 +292,24 @@ module tb_asic_postsynth;
   wire [31:0] i_addr   = `CPU.core_instr_req_o[63:32];
   wire        i_gnt    = `CPU.core_instr_resp_i[33];
   wire        i_rvalid = `CPU.core_instr_resp_i[32];
+  wire [31:0] i_rdata  = `CPU.core_instr_resp_i[31:0];
   wire        d_req    = `CPU.core_data_req_o[69];
   wire        d_we     = `CPU.core_data_req_o[68];
   wire [31:0] d_addr   = `CPU.core_data_req_o[63:32];
+  wire [31:0] d_wdata  = `CPU.core_data_req_o[31:0];
   wire        d_gnt    = `CPU.core_data_resp_i[33];
   wire        d_rvalid = `CPU.core_data_resp_i[32];
+  wire [31:0] d_rdata  = `CPU.core_data_resp_i[31:0];
+
+  // cycle-by-cycle trace of the CPU buses for the first N cycles
+  int trace_cycles = 250;
+  initial void'($value$plusargs("trace_cycles=%d", trace_cycles));
+  always @(posedge `CPU.clk_i) begin
+    if (rst_n && cycle_cnt < trace_cycles)
+      $display("[T] c=%0d I(rq%b gn%b rv%b a=%08h d=%08h) D(rq%b we%b gn%b rv%b a=%08h wd=%08h rd=%08h)",
+               cycle_cnt, i_req, i_gnt, i_rvalid, i_addr, i_rdata,
+               d_req, d_we, d_gnt, d_rvalid, d_addr, d_wdata, d_rdata);
+  end
 
   int cpu_clk_edges = 0, i_grants = 0, d_grants = 0, ram0_rd_evts = 0, ram0_wr_evts = 0;
   always @(posedge `CPU.clk_i) begin
