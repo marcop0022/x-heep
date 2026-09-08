@@ -115,8 +115,11 @@ filesets:
     file_type: verilogSource
 
   # Slim testbench for the gate-level netlist (boots from the SPI flash model).
+  # sg13g2_io_sim.sv replaces the real PDK IO models: the netlist connects only
+  # the functional pad pins (no power), so the real models would drive X.
   postsynth-tb:
     files:
+    - tb/sim_models/sg13g2_io_sim.sv
     - tb/yosys_spiflash.sv
     - tb/tb_asic_postsynth.sv
     file_type: systemVerilogSource
@@ -328,7 +331,8 @@ generate:
       verilog_models:
         - sg13g2_stdcell/verilog/sg13g2_udp.v
         - sg13g2_stdcell/verilog/sg13g2_stdcell.v
-        - sg13g2_io/verilog/sg13g2_io.v
+        # sg13g2_io.v is NOT listed: the netlist wires the IO pads without their
+        # power pins, so tb/sim_models/sg13g2_io_sim.sv is used instead.
         - sg13g2_sram/verilog/RM_IHPSG13_1P_core_behavioral.v
         - sg13g2_sram/verilog/RM_IHPSG13_1P_core_behavioral_bm_bist.v
         - sg13g2_sram/verilog/RM_IHPSG13_1P_8192x32_c4.v

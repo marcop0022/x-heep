@@ -239,16 +239,18 @@ module tb_asic_postsynth;
   int soc_reg_evts = 0;
   int ram0_rd_evts = 0;
   int ram0_wr_evts = 0;
+  int flash_sck_edges = 0;
   always @(`SOC_CTRL.reg_req_i)                                     soc_reg_evts++;
   always @(posedge `MEMSS.ram0_i.req_i) if (!`MEMSS.ram0_i.we_i)    ram0_rd_evts++;
   always @(posedge `MEMSS.ram0_i.req_i) if ( `MEMSS.ram0_i.we_i)    ram0_wr_evts++;
+  always @(spi_flash_sck_io) if (spi_flash_sck_io === 1'b0 || spi_flash_sck_io === 1'b1) flash_sck_edges++;
 
   initial forever begin
     #(hb_ns * 1ns);
-    $display("[TB] hb t=%t cyc=%0d | soc_ctrl: rst_ni=%b boot_sel=%b | reg_bus_evts=%0d ram0_rd=%0d ram0_wr=%0d | flash_cs=%b sck=%b",
+    $display("[TB] hb t=%t cyc=%0d | soc_ctrl rst_ni=%b boot_sel=%b | reg_evts=%0d ram0_rd=%0d ram0_wr=%0d | flash_cs=%b sck=%b sck_edges=%0d | uart_tx=%b",
              $time, cycle_cnt, `SOC_CTRL.rst_ni, `SOC_CTRL.boot_select_i,
              soc_reg_evts, ram0_rd_evts, ram0_wr_evts,
-             spi_flash_cs_0_io, spi_flash_sck_io);
+             spi_flash_cs_0_io, spi_flash_sck_io, flash_sck_edges, uart_tx_o);
   end
 
   // one-shot markers
