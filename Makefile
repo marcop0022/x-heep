@@ -346,8 +346,11 @@ yosys-ihp130-sim:
 
 ## Builds the post-synthesis (gate-level) simulation model with Questasim.
 ## Requires `make yosys-ihp130-sim` first, and IHP130 pointing at the PDK.
+## Wipes the build dir first: edalize's `work:` rule never recompiles once
+## `work/` exists, so an incremental rebuild would silently keep stale sources.
 POSTSYNTH_DIR = $(FUSESOC_BUILD_DIR)/sim_postsynth-modelsim
 questasim-build-postsynth:
+	rm -rf $(POSTSYNTH_DIR)
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynth --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim-postsynth.log
 
 ## Runs the post-synthesis simulation with the firmware booted from the flash model.
