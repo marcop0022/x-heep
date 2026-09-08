@@ -285,23 +285,35 @@ module tb_asic_postsynth;
   // ---------------------------------------------------------------------------
   // heartbeat: also report whether the spine is out of X and if the CPU is
   // touching the soc_ctrl register bus / the RAM
-  int soc_reg_evts   = 0;
-  int ram0_rd_evts   = 0;
-  int ram0_wr_evts   = 0;
-  int cpu_clk_edges  = 0;
-  int cpu_ifetch_evts = 0;
-  always @(`SOC_CTRL.reg_req_i)                                     soc_reg_evts++;
-  always @(posedge `MEMSS.ram0_i.req_i) if (!`MEMSS.ram0_i.we_i)    ram0_rd_evts++;
-  always @(posedge `MEMSS.ram0_i.req_i) if ( `MEMSS.ram0_i.we_i)    ram0_wr_evts++;
-  always @(posedge `CPU.clk_i)                                      cpu_clk_edges++;
-  always @(`CPU.core_instr_req_o)                                   cpu_ifetch_evts++;
+  // xheep_obi_{req,rsp}_t bit layout (packed, MSB first):
+  //   req [69:0] = {req[69], we[68], be[67:64], addr[63:32], wdata[31:0]}
+  //   rsp [33:0] = {gnt[33], rvalid[32], rdata[31:0]}
+  wire        i_req    = `CPU.core_instr_req_o[69];
+  wire [31:0] i_addr   = `CPU.core_instr_req_o[63:32];
+  wire        i_gnt    = `CPU.core_instr_resp_i[33];
+  wire        i_rvalid = `CPU.core_instr_resp_i[32];
+  wire        d_req    = `CPU.core_data_req_o[69];
+  wire        d_we     = `CPU.core_data_req_o[68];
+  wire [31:0] d_addr   = `CPU.core_data_req_o[63:32];
+  wire        d_gnt    = `CPU.core_data_resp_i[33];
+  wire        d_rvalid = `CPU.core_data_resp_i[32];
+
+  int cpu_clk_edges = 0, i_grants = 0, d_grants = 0, ram0_rd_evts = 0, ram0_wr_evts = 0;
+  always @(posedge `CPU.clk_i) begin
+    cpu_clk_edges++;
+    if (i_req && i_gnt) i_grants++;
+    if (d_req && d_gnt) d_grants++;
+  end
+  always @(posedge `MEMSS.ram0_i.req_i) if (!`MEMSS.ram0_i.we_i) ram0_rd_evts++;
+  always @(posedge `MEMSS.ram0_i.req_i) if ( `MEMSS.ram0_i.we_i) ram0_wr_evts++;
 
   initial forever begin
     #(hb_ns * 1ns);
-    $display("[TB] hb t=%t cyc=%0d | CPU: clk_edges=%0d rst_ni=%b sleep=%b ifetch_evts=%0d | soc_reg_evts=%0d ram0_rd=%0d ram0_wr=%0d | uart_tx=%b",
+    $display("[TB] hb t=%t cyc=%0d | I: req=%b gnt=%b rvalid=%b addr=%08h grants=%0d | D: req=%b we=%b gnt=%b rvalid=%b addr=%08h grants=%0d | ram0 rd=%0d wr=%0d | uart_tx=%b",
              $time, cycle_cnt,
-             cpu_clk_edges, `CPU.rst_ni, `CPU.core_sleep_o, cpu_ifetch_evts,
-             soc_reg_evts, ram0_rd_evts, ram0_wr_evts, uart_tx_o);
+             i_req, i_gnt, i_rvalid, i_addr, i_grants,
+             d_req, d_we, d_gnt, d_rvalid, d_addr, d_grants,
+             ram0_rd_evts, ram0_wr_evts, uart_tx_o);
   end
 
   // one-shot markers
