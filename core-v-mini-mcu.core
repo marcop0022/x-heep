@@ -114,6 +114,13 @@ filesets:
     - hw/asic/ihp-sg13g2/generated/asic_x_heep_system_sim.v
     file_type: verilogSource
 
+  # Slim testbench for the gate-level netlist (boots from the SPI flash model).
+  postsynth-tb:
+    files:
+    - tb/yosys_spiflash.sv
+    - tb/tb_asic_postsynth.sv
+    file_type: systemVerilogSource
+
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
@@ -651,22 +658,26 @@ targets:
         yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_sim_template.tcl
 
   # Post-synthesis (gate-level) simulation of the IHP-SG13G2 netlist.
-  # Phase 2: smoke test -- elaborate the netlist (`make yosys-ihp130-sim` first)
-  # against the PDK Verilog models with the netlist wrapper as toplevel, no
-  # testbench yet. Later phases add the dedicated testbench + firmware backdoor.
+  # Requires `make yosys-ihp130-sim` first (produces + copies the netlist) and
+  # IHP130 pointing at the PDK (the generator resolves the cell models there).
+  # Boots the firmware from the SPI flash model -- no hierarchical RAM backdoor.
   sim_postsynth:
     description: Post-synthesis (gate-level) simulation of the IHP-SG13G2 netlist
     default_tool: modelsim
     filesets:
     - postsynth-netlist
+    - postsynth-tb
     generate:
     - ihp130_sim_models
-    toplevel: [asic_x_heep_system_wrapper]
+    toplevel: [tb_asic_postsynth]
     tools:
       modelsim:
         vlog_options:
         - -override_timescale 1ns/1ps
+        - +define+FUNCTIONAL            # SRAM macro models: use the behavioral (no-SDF) path
         - +notimingchecks
         - -suppress vlog-2583
         - -suppress vlog-2577
         - -suppress vlog-2720
+        vsim_options:
+        - -voptargs=+acc=npr            # keep hierarchy visible for the EXIT peek
