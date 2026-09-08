@@ -353,10 +353,11 @@ questasim-build-postsynth:
 	rm -rf $(POSTSYNTH_DIR)
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynth --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim-postsynth.log
 
-## Runs the post-synthesis simulation with the firmware booted from the flash model.
-## Build the firmware first, e.g.: make app PROJECT=hello_world LINKER=flash_load
+## Runs the post-synthesis simulation. Firmware is backdoor-loaded into RAM and
+## the boot ROM auto-releases (POSTSYNTH_AUTOBOOT), so a normal on-chip build is
+## fine: make app PROJECT=hello_world
 questasim-run-postsynth:
-	$(MAKE) -C $(POSTSYNTH_DIR) run PLUSARGS="firmware=$(CURDIR)/sw/build/main.hex boot_sel=1 $(SIM_ARGS)"
+	$(MAKE) -C $(POSTSYNTH_DIR) run PLUSARGS="firmware=$(CURDIR)/sw/build/main.hex $(SIM_ARGS)"
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 

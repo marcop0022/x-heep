@@ -28,7 +28,18 @@ module soc_ctrl #(
   soc_ctrl_hw2reg_t hw2reg;
   reg_rsp_t reg_rsp_int;
 
-`ifndef SYNTHESIS
+`ifdef POSTSYNTH_AUTOBOOT
+  // Post-synthesis (gate-level) simulation only: there is no JTAG/debug master
+  // to release the boot loop, so the boot ROM would spin forever. Continuously
+  // drive the BOOT_EXIT_LOOP register to 1 so the boot ROM jumps straight to the
+  // firmware entry (BOOT_ADDRESS resets to 0x180, where the .init section is
+  // linked). Enabled only by the asic_yosys_sim_netlist Yosys template.
+  assign hw2reg.boot_exit_loop.d  = 1'b1;
+  assign hw2reg.boot_exit_loop.de = 1'b1;
+`elsif SYNTHESIS
+  assign hw2reg.boot_exit_loop.d  = 1'b0;
+  assign hw2reg.boot_exit_loop.de = 1'b0;
+`else
   logic testbench_set_exit_loop[1];
   //forced by simulation for preloading, do not touch
   //only arrays can be "forced" in verilator, thus array of 1 element is done
@@ -40,9 +51,6 @@ module soc_ctrl #(
   end
   assign hw2reg.boot_exit_loop.d  = testbench_set_exit_loop[0];
   assign hw2reg.boot_exit_loop.de = testbench_set_exit_loop[0];
-`else
-  assign hw2reg.boot_exit_loop.d  = 1'b0;
-  assign hw2reg.boot_exit_loop.de = 1'b0;
 `endif
 
   assign hw2reg.boot_select.de = 1'b1;

@@ -4,13 +4,14 @@
 //
 // Slim testbench for the post-synthesis (gate-level) simulation of the
 // IHP-SG13G2 netlist. The DUT is `asic_x_heep_system_wrapper`, which exposes
-// only the 59 pad wires. Firmware is brought in by booting from the SPI flash
-// model (no hierarchical RAM backdoor): the boot ROM copies it into RAM over
-// the spi_host and jumps to it -- an all-pads path that survives synthesis.
+// only the 59 pad wires. Firmware is backdoor-loaded into the SRAM arrays
+// (memory_subsystem is kept as hierarchy in the netlist) and the boot ROM is
+// released via POSTSYNTH_AUTOBOOT (soc_ctrl drives BOOT_EXIT_LOOP=1), so it
+// jumps to BOOT_ADDRESS (0x180) without needing JTAG or the SPI flash path.
 //
 // Plusargs:
 //   +firmware=<path>   flash image (.hex), $readmemh-ed into the spiflash model
-//   +boot_sel=<0|1>    1 = boot from flash (default), 0 = idle (debug entry)
+//   +boot_sel=<0|1>    0 = debug-entry / backdoor (default), 1 = flash boot
 //   +max_cycles=<n>    abort after n clock cycles
 //   +vcd               dump waveform.vcd
 //
@@ -26,7 +27,7 @@ module tb_asic_postsynth;
 
   logic clk = 1'b0;
   logic rst_n = 1'b0;
-  logic boot_sel = 1'b1;
+  logic boot_sel = 1'b0;
 
   always #(ClkPeriod / 2) clk = ~clk;
 
@@ -190,11 +191,40 @@ module tb_asic_postsynth;
   int    hb_ns      = 100_000;     // heartbeat period (sim ns)
   longint cycle_cnt = 0;
 
+  // RAM geometry (configs/general.hjson: 4 contiguous banks of 32 KiB at 0x0)
+  localparam int RamBankBytes = 32 * 1024;
+  localparam int RamBanks     = 4;
+
+  // Preload the firmware straight into the SRAM behavioural arrays. The netlist
+  // keeps memory_subsystem / sram_wrapper as hierarchy (the "spine"), and
+  // POSTSYNTH_AUTOBOOT drives soc_ctrl.BOOT_EXIT_LOOP=1 so the boot ROM jumps to
+  // BOOT_ADDRESS (0x180, the .init section) right after reset.
+  task automatic backdoor_load(input string hexfile);
+    logic [7:0]  b [0:RamBanks*RamBankBytes-1];
+    logic [31:0] w;
+    int bank, waddr;
+    foreach (b[i]) b[i] = 8'h00;
+    $readmemh(hexfile, b);
+    for (int a = 0; a < RamBanks*RamBankBytes; a += 4) begin
+      w     = {b[a+3], b[a+2], b[a+1], b[a]};
+      bank  = a / RamBankBytes;
+      waddr = (a % RamBankBytes) / 4;
+      case (bank)
+        0: `MEMSS.ram0_i.\genblk2.sram_inst .i_SRAM_1P_behavioral.memory[waddr] = w;
+        1: `MEMSS.ram1_i.\genblk2.sram_inst .i_SRAM_1P_behavioral.memory[waddr] = w;
+        2: `MEMSS.ram2_i.\genblk2.sram_inst .i_SRAM_1P_behavioral.memory[waddr] = w;
+        3: `MEMSS.ram3_i.\genblk2.sram_inst .i_SRAM_1P_behavioral.memory[waddr] = w;
+      endcase
+    end
+    $display("[TB] %t: backdoor-loaded %0s into RAM", $time, hexfile);
+  endtask
+
   initial begin : stimulus
     string boot_arg;
 
+    boot_sel = 1'b0;   // debug-entry path: boot ROM -> jalr BOOT_ADDRESS (0x180)
     if ($value$plusargs("boot_sel=%s", boot_arg))
-      boot_sel = (boot_arg == "0") ? 1'b0 : 1'b1;
+      boot_sel = (boot_arg == "1") ? 1'b1 : 1'b0;
 
     void'($value$plusargs("max_cycles=%d", max_cycles));
     void'($value$plusargs("heartbeat_ns=%d", hb_ns));
@@ -205,13 +235,19 @@ module tb_asic_postsynth;
     end
 
     if (!$value$plusargs("firmware=%s", firmware)) begin
-      $display("[TB] ERROR: no +firmware=<flash.hex> given");
+      $display("[TB] ERROR: no +firmware=<hex> given");
       $fatal(1);
     end
-    $display("[TB] loading flash image %0s", firmware);
+
+    // also drop it in the flash model, in case boot_sel=1 is forced
     $readmemh(firmware, flash_i.memory);
 
-    $display("[TB] boot_sel=%0d, max_cycles=%0d, releasing reset ...", boot_sel, max_cycles);
+    // backdoor into RAM shortly after reset, before the boot ROM jumps
+    @(posedge rst_n);
+    repeat (10) @(posedge clk);
+    backdoor_load(firmware);
+
+    $display("[TB] boot_sel=%0d, max_cycles=%0d", boot_sel, max_cycles);
   end
 
   // cycle limit

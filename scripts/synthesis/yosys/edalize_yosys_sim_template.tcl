@@ -33,6 +33,7 @@ source edalize_yosys_procs.tcl
 read_slang --top $top \
 	--define-macro SYNTHESIS=true \
 	--define-macro REMOVE_OBI_FIFO \
+	--define-macro POSTSYNTH_AUTOBOOT \
 	--compat-mode \
 	--keep-hierarchy \
 	--allow-use-before-declare \
