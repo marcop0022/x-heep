@@ -20,6 +20,7 @@
 // shorthands into the preserved netlist "spine"
 `define SOC_CTRL  dut.x_heep_system_i.core_v_mini_mcu_i.ao_peripheral_subsystem_i.soc_ctrl_i
 `define MEMSS     dut.x_heep_system_i.core_v_mini_mcu_i.memory_subsystem_i
+`define CPU       dut.x_heep_system_i.core_v_mini_mcu_i.cpu_subsystem_i
 
 module tb_asic_postsynth;
 
@@ -272,21 +273,23 @@ module tb_asic_postsynth;
   // ---------------------------------------------------------------------------
   // heartbeat: also report whether the spine is out of X and if the CPU is
   // touching the soc_ctrl register bus / the RAM
-  int soc_reg_evts = 0;
-  int ram0_rd_evts = 0;
-  int ram0_wr_evts = 0;
-  int flash_sck_edges = 0;
+  int soc_reg_evts   = 0;
+  int ram0_rd_evts   = 0;
+  int ram0_wr_evts   = 0;
+  int cpu_clk_edges  = 0;
+  int cpu_ifetch_evts = 0;
   always @(`SOC_CTRL.reg_req_i)                                     soc_reg_evts++;
   always @(posedge `MEMSS.ram0_i.req_i) if (!`MEMSS.ram0_i.we_i)    ram0_rd_evts++;
   always @(posedge `MEMSS.ram0_i.req_i) if ( `MEMSS.ram0_i.we_i)    ram0_wr_evts++;
-  always @(spi_flash_sck_io) if (spi_flash_sck_io === 1'b0 || spi_flash_sck_io === 1'b1) flash_sck_edges++;
+  always @(posedge `CPU.clk_i)                                      cpu_clk_edges++;
+  always @(`CPU.core_instr_req_o)                                   cpu_ifetch_evts++;
 
   initial forever begin
     #(hb_ns * 1ns);
-    $display("[TB] hb t=%t cyc=%0d | soc_ctrl rst_ni=%b boot_sel=%b | reg_evts=%0d ram0_rd=%0d ram0_wr=%0d | flash_cs=%b sck=%b sck_edges=%0d | uart_tx=%b",
-             $time, cycle_cnt, `SOC_CTRL.rst_ni, `SOC_CTRL.boot_select_i,
-             soc_reg_evts, ram0_rd_evts, ram0_wr_evts,
-             spi_flash_cs_0_io, spi_flash_sck_io, flash_sck_edges, uart_tx_o);
+    $display("[TB] hb t=%t cyc=%0d | CPU: clk_edges=%0d rst_ni=%b sleep=%b ifetch_evts=%0d | soc_reg_evts=%0d ram0_rd=%0d ram0_wr=%0d | uart_tx=%b",
+             $time, cycle_cnt,
+             cpu_clk_edges, `CPU.rst_ni, `CPU.core_sleep_o, cpu_ifetch_evts,
+             soc_reg_evts, ram0_rd_evts, ram0_wr_evts, uart_tx_o);
   end
 
   // one-shot markers

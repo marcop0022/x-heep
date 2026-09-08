@@ -96,6 +96,9 @@ foreach spine {
 	sram_wrapper
 	ao_peripheral_subsystem
 	soc_ctrl
+	cpu_subsystem
+	power_manager
+	boot_rom
 } {
 	yosys setattr -mod -set keep_hierarchy 1 "$spine*"
 }
