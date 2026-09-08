@@ -17,6 +17,10 @@
 //
 // EXIT is observed on the (preserved) soc_ctrl hierarchy inside the netlist.
 
+// shorthands into the preserved netlist "spine"
+`define SOC_CTRL  dut.x_heep_system_i.core_v_mini_mcu_i.ao_peripheral_subsystem_i.soc_ctrl_i
+`define MEMSS     dut.x_heep_system_i.core_v_mini_mcu_i.memory_subsystem_i
+
 module tb_asic_postsynth;
 
   // ---------------------------------------------------------------------------
@@ -266,10 +270,6 @@ module tb_asic_postsynth;
   // ---------------------------------------------------------------------------
   // progress instrumentation
   // ---------------------------------------------------------------------------
-  // shorthands into the preserved spine
-  `define SOC_CTRL  dut.x_heep_system_i.core_v_mini_mcu_i.ao_peripheral_subsystem_i.soc_ctrl_i
-  `define MEMSS     dut.x_heep_system_i.core_v_mini_mcu_i.memory_subsystem_i
-
   // heartbeat: also report whether the spine is out of X and if the CPU is
   // touching the soc_ctrl register bus / the RAM
   int soc_reg_evts = 0;
