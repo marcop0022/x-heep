@@ -255,6 +255,18 @@ module tb_asic_postsynth;
     $display("[TB] boot_sel=%0d, max_cycles=%0d", boot_sel, max_cycles);
   end
 
+  // ---------------------------------------------------------------------------
+  // The debug subsystem is unused here, but at gate level its ndmreset feedback
+  // (debug_reset_n -> dm.rst_ni -> ndmreset -> debug_reset_n) does not resolve
+  // out of X, leaving cpu_subsystem.rst_ni = X so the CPU never starts. Drive
+  // the CPU reset / debug_req directly from the testbench instead.
+  // ---------------------------------------------------------------------------
+  initial begin
+    force `CPU.rst_ni      = rst_n;
+    force `CPU.debug_req_i = 1'b0;
+    force `CPU.irq_i       = 32'b0;   // interrupt sources come from flattened X logic
+  end
+
   // cycle limit
   always @(posedge clk) begin
     if (!rst_n) begin
