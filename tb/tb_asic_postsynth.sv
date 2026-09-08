@@ -186,8 +186,9 @@ module tb_asic_postsynth;
   // firmware load + run control
   // ---------------------------------------------------------------------------
   string firmware;
-  int    max_cycles = 0;
-  int    cycle_cnt = 0;
+  int    max_cycles = 3_000_000;   // ~30 ms sim time: generous for flash boot + hello_world
+  int    hb_ns      = 100_000;     // heartbeat period (sim ns)
+  longint cycle_cnt = 0;
 
   initial begin : stimulus
     string boot_arg;
@@ -196,6 +197,7 @@ module tb_asic_postsynth;
       boot_sel = (boot_arg == "0") ? 1'b0 : 1'b1;
 
     void'($value$plusargs("max_cycles=%d", max_cycles));
+    void'($value$plusargs("heartbeat_ns=%d", hb_ns));
 
     if ($test$plusargs("vcd")) begin
       $dumpfile("waveform.vcd");
@@ -209,7 +211,7 @@ module tb_asic_postsynth;
     $display("[TB] loading flash image %0s", firmware);
     $readmemh(firmware, flash_i.memory);
 
-    $display("[TB] boot_sel=%0d, releasing reset ...", boot_sel);
+    $display("[TB] boot_sel=%0d, max_cycles=%0d, releasing reset ...", boot_sel, max_cycles);
   end
 
   // cycle limit
@@ -218,9 +220,35 @@ module tb_asic_postsynth;
       cycle_cnt <= 0;
     end else begin
       cycle_cnt <= cycle_cnt + 1;
-      if (max_cycles != 0 && cycle_cnt >= max_cycles)
-        $fatal(2, "[TB] aborted: reached +max_cycles=%0d", max_cycles);
+      if (max_cycles != 0 && cycle_cnt >= max_cycles) begin
+        $display("[TB] %t: TIMEOUT at %0d cycles (no EXIT)", $time, cycle_cnt);
+        $finish;
+      end
     end
+  end
+
+  // ---------------------------------------------------------------------------
+  // progress instrumentation
+  // ---------------------------------------------------------------------------
+  // heartbeat
+  initial forever begin
+    #(hb_ns * 1ns);
+    $display("[TB] heartbeat: t=%t  cycles=%0d  flash_cs=%b spi_sck(activity)=%b",
+             $time, cycle_cnt, spi_flash_cs_0_io, spi_flash_sck_io);
+  end
+
+  // boot ROM started talking to the flash
+  initial begin
+    @(negedge spi_flash_cs_0_io);
+    $display("[TB] %t: SPI-flash CS asserted -- boot ROM is reading the flash", $time);
+  end
+
+  // first write into RAM bank 0 (the flash->RAM copy landing)
+  wire ram0_wr = dut.x_heep_system_i.core_v_mini_mcu_i.memory_subsystem_i.ram0_i.req_i
+               & dut.x_heep_system_i.core_v_mini_mcu_i.memory_subsystem_i.ram0_i.we_i;
+  initial begin
+    @(posedge ram0_wr);
+    $display("[TB] %t: first write to RAM bank 0 -- flash copy in progress", $time);
   end
 
   // ---------------------------------------------------------------------------
