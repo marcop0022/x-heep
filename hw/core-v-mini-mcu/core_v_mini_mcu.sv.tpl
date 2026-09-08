@@ -195,6 +195,17 @@ module core_v_mini_mcu #(
   // signals to debug unit
   logic debug_core_req;
   logic debug_reset_n;
+  logic debug_ndmreset_n;  // raw ndmreset from the debug subsystem
+
+`ifdef POSTSYNTH_AUTOBOOT
+  // Post-synthesis (gate-level) simulation: the unused debug subsystem's
+  // ndmreset forms a feedback (debug_reset_n -> dm.rst_ni -> ndmreset) that does
+  // not resolve out of X at gate level, poisoning every subsystem reset that is
+  // ANDed with debug_reset_n. There is no JTAG here, so tie it inactive.
+  assign debug_reset_n = 1'b1;
+`else
+  assign debug_reset_n = debug_ndmreset_n;
+`endif
   logic [NRHARTS-1:0] debug_req;
   // core
   logic core_sleep;
@@ -371,7 +382,7 @@ module core_v_mini_mcu #(
       .spi_slave_miso_oe_o(spi_slave_miso_oe_o),
       .spi_slave_mosi_i(spi_slave_mosi_i),
       .debug_core_req_o(debug_req),
-      .debug_ndmreset_no(debug_reset_n),
+      .debug_ndmreset_no(debug_ndmreset_n),
       .debug_slave_req_i(debug_slave_req),
       .debug_slave_resp_o(debug_slave_resp),
       .debug_master_req_o(debug_master_req),
