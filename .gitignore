@@ -16,6 +16,9 @@ __pycache__/
 # Apps output files
 run_verif_rtl_log.txt
 
+# Post-synthesis simulation netlist (copied by `make yosys-ihp130-sim`)
+hw/asic/ihp-sg13g2/generated/
+
 # reg-generator cache files
 *_reg_gen.cache
 

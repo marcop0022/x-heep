@@ -335,9 +335,19 @@ yosys-ihp130:
 
 ## Runs a standalone Yosys synthesis of X-HEEP producing a HIERARCHICAL (non-flattened)
 ## netlist for post-synthesis (gate-level) simulation. Requires IHP130 to point at the PDK.
-## The netlist is written to the fusesoc build dir as asic_x_heep_system_sim.v.
+## The netlist is copied to hw/asic/ihp-sg13g2/generated/asic_x_heep_system_sim.v
+## where the sim_postsynth target picks it up.
+POSTSYNTH_NETLIST = hw/asic/ihp-sg13g2/generated/asic_x_heep_system_sim.v
 yosys-ihp130-sim:
 	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_sim_netlist openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildyosys-sim.log
+	mkdir -p $(dir $(POSTSYNTH_NETLIST))
+	cp $(FUSESOC_BUILD_DIR)/asic_yosys_sim_netlist-yosys/asic_x_heep_system_sim.v $(POSTSYNTH_NETLIST)
+	@echo "### post-synthesis netlist copied to $(POSTSYNTH_NETLIST)"
+
+## Builds the post-synthesis (gate-level) simulation model with Questasim.
+## Requires `make yosys-ihp130-sim` first, and IHP130 pointing at the PDK.
+questasim-build-postsynth:
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynth --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim-postsynth.log
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 

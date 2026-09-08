@@ -107,6 +107,13 @@ filesets:
     - hw/asic/ihp-sg13g2/rtl/asic_x_heep_system_wrapper.sv
     file_type: systemVerilogSource
 
+  # Gate-level netlist produced by `make yosys-ihp130-sim` (target
+  # asic_yosys_sim_netlist) and copied to this fixed path by that Make target.
+  postsynth-netlist:
+    files:
+    - hw/asic/ihp-sg13g2/generated/asic_x_heep_system_sim.v
+    file_type: verilogSource
+
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
@@ -296,6 +303,29 @@ scripts:
     cmd: [sh, -c, rm -f uart0.log]
   print_uart_log:
     cmd: [sh, -c, cat uart0.log]
+
+generators:
+  # Emits a .core listing the IHP-SG13G2 PDK Verilog cell/macro models (found
+  # under $IHP130) for the post-synthesis (gate-level) simulation.
+  ihp130-sim-models-gen:
+    interpreter: python
+    command: scripts/sim/ihp130_sim_models_gen.py
+    cache_type: input
+
+generate:
+  # PDK Verilog models for the post-synthesis simulation, resolved from $IHP130.
+  # Paths are relative to $IHP130/.../libs.ref and listed in compilation order.
+  ihp130_sim_models:
+    generator: ihp130-sim-models-gen
+    parameters:
+      verilog_models:
+        - sg13g2_stdcell/verilog/sg13g2_udp.v
+        - sg13g2_stdcell/verilog/sg13g2_stdcell.v
+        - sg13g2_io/verilog/sg13g2_io.v
+        - sg13g2_sram/verilog/RM_IHPSG13_1P_core_behavioral.v
+        - sg13g2_sram/verilog/RM_IHPSG13_1P_core_behavioral_bm_bist.v
+        - sg13g2_sram/verilog/RM_IHPSG13_1P_8192x32_c4.v
+        - sg13g2_sram/verilog/RM_IHPSG13_1P_2048x32_c2_bm_bist.v
 
 targets:
   default: &default_target
@@ -619,3 +649,24 @@ targets:
         arch: generic
         output_format: verilog
         yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_sim_template.tcl
+
+  # Post-synthesis (gate-level) simulation of the IHP-SG13G2 netlist.
+  # Phase 2: smoke test -- elaborate the netlist (`make yosys-ihp130-sim` first)
+  # against the PDK Verilog models with the netlist wrapper as toplevel, no
+  # testbench yet. Later phases add the dedicated testbench + firmware backdoor.
+  sim_postsynth:
+    description: Post-synthesis (gate-level) simulation of the IHP-SG13G2 netlist
+    default_tool: modelsim
+    filesets:
+    - postsynth-netlist
+    generate:
+    - ihp130_sim_models
+    toplevel: [asic_x_heep_system_wrapper]
+    tools:
+      modelsim:
+        vlog_options:
+        - -override_timescale 1ns/1ps
+        - +notimingchecks
+        - -suppress vlog-2583
+        - -suppress vlog-2577
+        - -suppress vlog-2720
