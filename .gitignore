@@ -1,6 +1,9 @@
 
 *.log
 build/
+
+# Staged post-synthesis netlist (PDK-derived, keep private / do not commit)
+implementation/yosys/netlist/*.v
 *.so
 *.hex
 *.elf

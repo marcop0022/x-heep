@@ -103,9 +103,34 @@ filesets:
   ip-asic-ihp:
     depend:
     - technology::prim_ihp-sg13g2
+
+  # Chip-level wrapper used ONLY to give `x_heep_system` a synthesizable
+  # boundary when it is NOT the direct synthesis top (kept for reference /
+  # alternative flows). Not used by the `x_heep_system`-as-top flow below.
+  ip-asic-ihp-wrapper:
     files:
     - hw/asic/ihp-sg13g2/rtl/asic_x_heep_system_wrapper.sv
     file_type: systemVerilogSource
+
+  # Post-synthesis gate-level netlist produced by the standalone Yosys ASIC
+  # flow (see `asic_yosys_synthesis` below), staged at a fixed path after
+  # each run (see `make yosys-ihp130-stage-netlist`). Its top module is
+  # `x_heep_system`, so it can be swapped in for the RTL fileset `x_heep_system`
+  # without touching the testbench (`tb_top`/`testharness` still instantiate
+  # `x_heep_system_i` the same way).
+  postsynthesis-netlist:
+    files:
+    - implementation/yosys/netlist/x_heep_system_netlist.v
+    file_type: verilogSource
+
+  # Pre-build hook: vlog-compiles the IHP-SG13G2 PDK's functional Verilog
+  # simulation models (std cells, IO pads, SRAM macros) into the QuestaSim
+  # work library. Needed because their exact location under $IHP130 is only
+  # known at run time (see the script for the searched paths).
+  pre_build_ihp_postsyn_models:
+    files:
+    - scripts/sim/modelsim/compile_ihp_postsyn_models.sh
+    file_type: user
 
   rtl-sky130:
     files:
@@ -284,6 +309,10 @@ scripts:
     cmd:
     - python
     - ../../../scripts/sim/vcs/patch_vcs_ams_Makefile.py
+  pre_build_ihp_postsyn_models:
+    cmd:
+    - sh
+    - ../../../scripts/sim/modelsim/compile_ihp_postsyn_models.sh
 
   # ASIC synthesis utils
   generate_yosys_filelist:
@@ -402,6 +431,69 @@ targets:
         make_options:
           # Use the number of available cores (up to a max of 8) for parallel compilation, with a fallback to 4 if nproc is not available
           - '-j$(shell N=$$(nproc 2>/dev/null || echo 4); [ "$$N" -le 8 ] && echo "$$N" || echo 8)'
+
+  # Post-synthesis gate-level simulation of the netlist produced by
+  # `asic_yosys_synthesis` (top module `x_heep_system`). Since that netlist
+  # has the same module name/port list as the RTL `x_heep_system` fileset,
+  # it is swapped in for it here and `tb_top`/`testharness` are reused
+  # unmodified. Requirements:
+  #   - stage the netlist first: `make yosys-ihp130 yosys-ihp130-stage-netlist`
+  #     (copies the Yosys output to implementation/yosys/netlist/x_heep_system_netlist.v);
+  #   - set $IHP130 to the IHP-SG13G2 PDK root before building, so
+  #     scripts/sim/modelsim/compile_ihp_postsyn_models.sh can vlog-compile
+  #     the std-cell/IO-pad/SRAM functional Verilog models it references;
+  #   - boot from flash (`+boot_sel=1` at run time): the JTAG force-load path
+  #     (tb_loadHEX) pokes DUT-internal hierarchy that does not survive
+  #     synthesis, while flash boot (load_flash_hex -> spiflash model) and
+  #     real JTAG_DPI both stay at the pad level and work unchanged.
+  # NOTE: deliberately NOT built on `*default_target` (which pulls in
+  # `files_rtl_generic`, i.e. core_v_mini_mcu.sv and its ~25 RTL IP
+  # dependencies). The gate-level netlist is fully self-contained after
+  # synthesis/flattening, so none of the RTL sources are needed here.
+  sim_postsynthesis:
+    default_tool: modelsim
+    description: QuestaSim post-synthesis (gate-level) simulation of the Yosys/IHP-SG13G2 netlist
+    filesets:
+    - tb-utils
+    - postsynthesis-netlist
+    - pre_build_remote_bitbang
+    - pre_build_uartdpi
+    - pre_patch_modelsim_Makefile
+    - pre_build_ihp_postsyn_models
+    - tb-sv
+    toplevel: [tb_top]
+    hooks:
+      pre_build:
+        - tool_modelsim? (pre_build_uartdpi)
+        - tool_modelsim? (pre_build_remote_bitbang)
+        - tool_modelsim? (pre_patch_modelsim_Makefile) # this is required by Questa 2020 on
+        - tool_modelsim? (pre_build_ihp_postsyn_models)
+      pre_run:
+        - remove_uart_log
+      post_run:
+        - print_uart_log
+    parameters:
+    - JTAG_DPI
+    - USE_EXTERNAL_DEVICE_EXAMPLE
+    - REMOVE_OBI_FIFO
+    - COMMON_CELLS_ASSERTS_OFF
+    - ASSERTS_OFF
+    tools:
+      modelsim:
+        vlog_options:
+        - -override_timescale 1ns/1ps
+        - -suppress vlog-2583
+        - -suppress vlog-2577
+        - -suppress vlog-2720
+        - -pedanticerrors
+        - -define MODELSIM
+        - +notimingcheck
+        - +nospecify
+        vsim_options:
+        - -sv_lib ../../../hw/vendor/lowrisc/opentitan/hw/dv/dpi/uartdpi/uartdpi
+        - -sv_lib ../../../hw/vendor/pulp_platform/pulpissimo/rtl/tb/remote_bitbang/librbs
+        - -voptargs=+acc=npr
+        - +bus_conflict_off
 
   sim_sc:
     <<: *default_target
@@ -593,7 +685,16 @@ targets:
     hooks:
       pre_build:
         - generate_yosys_filelist
-    toplevel: [asic_x_heep_system_wrapper]
+    # NOTE: `x_heep_system` is the synthesis top (not the `asic_x_heep_system_wrapper`
+    # chip-level wrapper) so the resulting netlist is a drop-in replacement for the
+    # RTL `x_heep_system` fileset: same module name and port list, so `tb_top`/
+    # `testharness` (which instantiate `x_heep_system_i`) need no changes for
+    # post-synthesis simulation (see the `sim_postsynthesis` target below).
+    # `x_heep_system` exposes 6 unconnected `if_xif` SystemVerilog interface ports
+    # at its boundary (used only when a CPU extension is enabled); this is
+    # untested with yosys-slang as of this writing and may need extra
+    # `read_slang` flags in edalize_yosys_template.tcl if elaboration fails.
+    toplevel: [x_heep_system]
     tools:
       yosys:
         arch: generic

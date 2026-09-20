@@ -51,6 +51,9 @@ BUILD_DIR         = build
 FUSESOC_BUILD_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name 'openhwgroup.org_systems_core-v-mini-mcu_*' 2>/dev/null | sort -V | head -n 1)
 VERILATOR_DIR     = $(FUSESOC_BUILD_DIR)/sim-verilator
 QUESTASIM_DIR     = $(FUSESOC_BUILD_DIR)/sim-modelsim
+QUESTASIM_POSTSYNTH_DIR = $(FUSESOC_BUILD_DIR)/sim_postsynthesis-modelsim
+YOSYS_NETLIST_SRC = $(FUSESOC_BUILD_DIR)/asic_yosys_synthesis-yosys/asic_x_heep_system.v
+YOSYS_NETLIST_STAGED = implementation/yosys/netlist/x_heep_system_netlist.v
 
 # Project options are based on the app to be built (default - hello_world)
 PROJECT ?= hello_world
@@ -329,9 +332,41 @@ asic:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=asic_synthesis $(FUSESOC_FLAGS) --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee builddesigncompiler.log
 
 ## Runs a standalone Yosys synthesis of X-HEEP targeting the IHP-SG13G2 technology.
-## The netlist is written to the fusesoc build dir as asic_x_heep_system.v (and yosys.v).
+## The netlist is written to the fusesoc build dir as asic_x_heep_system.v (and yosys.v),
+## with `x_heep_system` as its top module.
 yosys-ihp130:
 	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildyosys.log
+
+## Stages the netlist produced by `yosys-ihp130` at the fixed path read by the
+## `sim_postsynthesis` fusesoc target (postsynthesis-netlist fileset).
+## Run this after every `yosys-ihp130` re-run, before questasim-build-postsynth.
+yosys-ihp130-stage-netlist:
+	@test -f "$(YOSYS_NETLIST_SRC)" || (echo "ERROR: $(YOSYS_NETLIST_SRC) not found - run 'make yosys-ihp130' first" && exit 1)
+	mkdir -p implementation/yosys/netlist
+	cp $(YOSYS_NETLIST_SRC) $(YOSYS_NETLIST_STAGED)
+
+## Questasim post-synthesis (gate-level) simulation build of the Yosys/IHP-SG13G2 netlist.
+## Requires: `make yosys-ihp130 yosys-ihp130-stage-netlist` already run, and
+## $IHP130 set to the IHP-SG13G2 PDK root (see scripts/sim/modelsim/compile_ihp_postsyn_models.sh).
+questasim-build-postsynth:
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth.log
+
+## Questasim post-synthesis simulation with HDL optimized compilation
+questasim-build-postsynth-opt: questasim-build-postsynth
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) opt
+
+## Launches the post-synthesis gate-level simulation with the compiled firmware
+## (`app` target), booting from flash (JTAG force-load does not survive synthesis).
+questasim-run-postsynth:
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1"
+
+## First builds the app and then uses Questasim to gate-level simulate the netlist and run the FW
+questasim-run-postsynth-app: app
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1"
+
+## Same as questasim-run-postsynth but using the HDL optimized compilation
+questasim-run-postsynth-opt:
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1"
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 
