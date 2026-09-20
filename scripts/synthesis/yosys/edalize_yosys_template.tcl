@@ -20,10 +20,23 @@ echo on
 # (which goes straight to yosys' command dispatch, not the Tcl proc).
 source edalize_yosys_procs.tcl
 
+# `x_heep_system` (the actual RTL top, and the module name `$top` resolves to
+# for this target) cannot be a synthesis top on its own: it exposes 6
+# unconnected SystemVerilog `interface` ports (the CV-X-IF eXtension
+# Interface), and slang refuses to elaborate a top-level interface port with
+# nothing bound to it. The `generate_xif_tieoff_wrapper` pre_build hook
+# (scripts/synthesis/yosys/generate_xif_tieoff_wrapper.py) generates
+# `x_heep_system_synth_top.sv`: a thin wrapper with the exact same
+# parameter/port list as `x_heep_system` minus those 6 ports (tied off
+# internally instead). We synthesize THAT as top, then `rename` the result
+# back to `x_heep_system` below so the netlist stays a drop-in replacement
+# for the RTL `x_heep_system` fileset.
+set synth_top x_heep_system_synth_top
+
 # Read the whole RTL through slang.
 # fusesoc/edalize does not forward the `parameters` vlogdefines to a custom template,
 # so the synthesis macros are (re)defined here explicitly.
-read_slang --top $top \
+read_slang --top $synth_top \
 	--define-macro SYNTHESIS=true \
 	--define-macro REMOVE_OBI_FIFO \
 	--compat-mode \
@@ -36,7 +49,8 @@ read_slang --top $top \
 	-Wno-implicit-conv \
 	-Wno-redef-macro \
 	-Wno-unconnected-port \
-	-f "files.flist"
+	-f "files.flist" \
+	x_heep_system_synth_top.sv
 
 # `--ignore-unknown-modules` above lets slang emit the not-yet-mapped PDK
 # primitives (sg13g2_* std cells / IO pads, RM_IHPSG13_1P_* SRAM macros) as
@@ -77,14 +91,23 @@ if {[info exists ::env(IHP130)] && $::env(IHP130) ne ""} {
 		yosys read_liberty -lib -overwrite $sram_lib
 	}
 
-	yosys synth -top $top -flatten
+	yosys synth -top $synth_top -flatten
 	yosys dfflibmap -liberty $stdcell_lib
 	yosys abc -liberty $stdcell_lib
 	yosys clean
 } else {
 	puts "\[x-heep] IHP130 not set: generic synthesis, PDK cells left as black boxes."
-	yosys synth -top $top -flatten
+	yosys synth -top $synth_top -flatten
 }
+
+# Rename the synthesized top back to `x_heep_system` so the netlist has the
+# same module name (and port list) as the RTL fileset it replaces.
+# `-flatten` inlines the original `x_heep_system` submodule into the top, but
+# may leave its now-unreferenced module definition around in the design; if
+# so it would collide with the name we are renaming into, so drop it first
+# (the `catch` is a no-op if `synth`'s own cleanup already removed it).
+catch {yosys delete x_heep_system}
+yosys rename -top x_heep_system
 
 # Human-readable name for the X-HEEP ASIC flow ...
 yosys write_verilog -noattr asic_x_heep_system.v

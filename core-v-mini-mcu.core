@@ -132,6 +132,15 @@ filesets:
     - scripts/sim/modelsim/compile_ihp_postsyn_models.sh
     file_type: user
 
+  # Pre-build hook: generates x_heep_system_synth_top.sv, a synthesis-only
+  # top that ties off x_heep_system's 6 unconnected `if_xif` interface ports
+  # (see scripts/synthesis/yosys/generate_xif_tieoff_wrapper.py for why this
+  # is needed and how it is used by edalize_yosys_template.tcl).
+  generate_xif_tieoff_wrapper:
+    files:
+    - scripts/synthesis/yosys/generate_xif_tieoff_wrapper.py
+    file_type: user
+
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
@@ -319,6 +328,10 @@ scripts:
     cmd:
     - sh
     - ../../../scripts/synthesis/yosys/generate_yosys_filelist.sh
+  generate_xif_tieoff_wrapper:
+    cmd:
+    - python
+    - ../../../scripts/synthesis/yosys/generate_xif_tieoff_wrapper.py
 
   # Simulation utils
   remove_uart_log:
@@ -682,18 +695,22 @@ targets:
     filesets_append:
       - x_heep_system
       - ip-asic-ihp
+      - generate_xif_tieoff_wrapper
     hooks:
       pre_build:
         - generate_yosys_filelist
+        - generate_xif_tieoff_wrapper
     # NOTE: `x_heep_system` is the synthesis top (not the `asic_x_heep_system_wrapper`
     # chip-level wrapper) so the resulting netlist is a drop-in replacement for the
     # RTL `x_heep_system` fileset: same module name and port list, so `tb_top`/
     # `testharness` (which instantiate `x_heep_system_i`) need no changes for
     # post-synthesis simulation (see the `sim_postsynthesis` target below).
-    # `x_heep_system` exposes 6 unconnected `if_xif` SystemVerilog interface ports
-    # at its boundary (used only when a CPU extension is enabled); this is
-    # untested with yosys-slang as of this writing and may need extra
-    # `read_slang` flags in edalize_yosys_template.tcl if elaboration fails.
+    # `x_heep_system` exposes 6 unconnected `if_xif` SystemVerilog interface
+    # ports at its boundary (used only when a CPU extension is enabled); slang
+    # refuses to elaborate a top-level module with those unbound, so the
+    # `generate_xif_tieoff_wrapper` hook generates a thin synthesis-only top
+    # that ties them off and is used as the real `read_slang --top` (see
+    # edalize_yosys_template.tcl), then renamed back to `x_heep_system`.
     toplevel: [x_heep_system]
     tools:
       yosys:
