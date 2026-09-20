@@ -2,8 +2,9 @@
 *.log
 build/
 
-# Staged post-synthesis netlist (PDK-derived, keep private / do not commit)
+# Staged post-synthesis netlist + generated sim shim (PDK-derived / regenerated, do not commit)
 implementation/yosys/netlist/*.v
+implementation/yosys/netlist/*.sv
 *.so
 *.hex
 *.elf

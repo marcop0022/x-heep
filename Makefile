@@ -340,10 +340,14 @@ yosys-ihp130:
 ## Stages the netlist produced by `yosys-ihp130` at the fixed path read by the
 ## `sim_postsynthesis` fusesoc target (postsynthesis-netlist fileset).
 ## Run this after every `yosys-ihp130` re-run, before questasim-build-postsynth.
+## Also (re)generates the simulation-only shim that reintroduces x_heep_system's
+## parameter list around the netlist (see scripts/sim/modelsim/generate_postsyn_sim_shim.py);
+## requires x_heep_system.sv, i.e. `make mcu-gen` already run.
 yosys-ihp130-stage-netlist:
 	@test -f "$(YOSYS_NETLIST_SRC)" || (echo "ERROR: $(YOSYS_NETLIST_SRC) not found - run 'make yosys-ihp130' first" && exit 1)
 	mkdir -p implementation/yosys/netlist
 	cp $(YOSYS_NETLIST_SRC) $(YOSYS_NETLIST_STAGED)
+	$(PYTHON) scripts/sim/modelsim/generate_postsyn_sim_shim.py
 
 ## Questasim post-synthesis (gate-level) simulation build of the Yosys/IHP-SG13G2 netlist.
 ## Requires: `make yosys-ihp130 yosys-ihp130-stage-netlist` already run, and
