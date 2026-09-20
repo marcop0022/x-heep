@@ -507,6 +507,10 @@ targets:
         - -sv_lib ../../../hw/vendor/pulp_platform/pulpissimo/rtl/tb/remote_bitbang/librbs
         - -voptargs=+acc=npr
         - +bus_conflict_off
+        # Resolves the sg13g2_*/RM_IHPSG13_1P_* cell instances in the netlist
+        # against the library compiled by compile_ihp_postsyn_models.sh
+        # (kept separate from `work`, see that script for why).
+        - -L ihp_pdk_lib
 
   sim_sc:
     <<: *default_target
