@@ -20,12 +20,14 @@ set C $M/cpu_subsystem_i
 # Add one signal to the list, skipping (with a note) any path that does not
 # exist, so a single renamed port does not abort the whole trace.
 proc tl {label sig} {
-  if {[catch {add list -radix hex -label $label $sig} err]} {
+  if {[catch {add list -radix hex -width 12 -label $label $sig} err]} {
     echo "\[postsynth_trace] SKIPPED $label ($sig): $err"
   }
 }
 
 configure list -delta collapse
+# Print values as plain hex digits (no 32'h prefix), so they fit the columns.
+catch {radix -showbase 0}
 
 tl rst_n    $C/rst_ni
 tl dbg_req  $C/debug_req_i
