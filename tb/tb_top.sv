@@ -46,6 +46,15 @@ module tb_top #(
   wire                jtag_tdi;
   wire                jtag_tdo;
 
+  // Nothing drives the external JTAG pins (JTAG_DPI=1 uses the testharness'
+  // internal SimJTAG instead), so tie them off with the TAP held in reset.
+  // Harmless in RTL, but required at gate level: floating TRST/TCK leave the
+  // debug TAP (and, through the DMI CDC, ndmreset) at X.
+  assign jtag_tck    = 1'b0;
+  assign jtag_trst_n = 1'b0;
+  assign jtag_tms    = 1'b0;
+  assign jtag_tdi    = 1'b0;
+
   // allow vcd dump
   initial begin
     if ($test$plusargs("vcd")) begin
