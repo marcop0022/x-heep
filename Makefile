@@ -333,7 +333,7 @@ asic:
 
 ## Runs a standalone Yosys synthesis of X-HEEP targeting the IHP-SG13G2 technology.
 ## The netlist is written to the fusesoc build dir as asic_x_heep_system.v (and yosys.v),
-## with `x_heep_system` as its top module.
+## with `x_heep_system_synth_top` as its top module.
 yosys-ihp130:
 	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildyosys.log
 
@@ -347,6 +347,7 @@ yosys-ihp130-stage-netlist:
 	@test -f "$(YOSYS_NETLIST_SRC)" || (echo "ERROR: $(YOSYS_NETLIST_SRC) not found - run 'make yosys-ihp130' first" && exit 1)
 	mkdir -p implementation/yosys/netlist
 	cp $(YOSYS_NETLIST_SRC) $(YOSYS_NETLIST_STAGED)
+	@! grep -nE '^\s*assert\s*\(' $(YOSYS_NETLIST_STAGED) | head -5 | grep . || (echo "ERROR: netlist still contains assert statements - re-run 'make yosys-ihp130' (chformal -remove)" && exit 1)
 	$(PYTHON) scripts/sim/modelsim/generate_postsyn_sim_shim.py
 
 ## Questasim post-synthesis (gate-level) simulation build of the Yosys/IHP-SG13G2 netlist.

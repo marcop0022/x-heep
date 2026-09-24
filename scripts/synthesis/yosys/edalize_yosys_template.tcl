@@ -39,6 +39,8 @@ set synth_top x_heep_system_synth_top
 read_slang --top $synth_top \
 	--define-macro SYNTHESIS=true \
 	--define-macro REMOVE_OBI_FIFO \
+	--define-macro ASSERTS_OFF \
+	--define-macro COMMON_CELLS_ASSERTS_OFF \
 	--compat-mode \
 	--keep-hierarchy \
 	--allow-use-before-declare \
@@ -51,6 +53,12 @@ read_slang --top $synth_top \
 	-Wno-unconnected-port \
 	-f "files.flist" \
 	x_heep_system_synth_top.sv
+
+# Drop the assertion cells ($check/$assert/...) slang still emits for
+# unguarded immediate/concurrent assertions: they are meaningless in a gate
+# netlist, and write_verilog would dump them as `assert(...)` statements,
+# which the plain-Verilog postsynthesis simulation cannot compile.
+yosys chformal -remove
 
 # `--ignore-unknown-modules` above lets slang emit the not-yet-mapped PDK
 # primitives (sg13g2_* std cells / IO pads, RM_IHPSG13_1P_* SRAM macros) as

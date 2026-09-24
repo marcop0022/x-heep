@@ -540,6 +540,9 @@ targets:
         - -suppress vlog-2720
         - -pedanticerrors
         - -define MODELSIM
+        # Stubs out tb_util.svh's JTAG force-load tasks (they reference
+        # DUT-internal hierarchy that does not exist in the netlist).
+        - -define POSTSYNTHESIS
         - +notimingcheck
         - +nospecify
         vsim_options:
