@@ -83,8 +83,11 @@ printf '  %s\n' "${MODEL_FILES[@]}"
 
 vlib "$PDK_LIB"
 vmap "$PDK_LIB" "$PDK_LIB"
-# FUNCTIONAL: the SRAM macro models (RM_IHPSG13_1P_*) otherwise wire their
-# behavioral core to the A_*_DELAY nets, which only the $setuphold timing
-# checks of their `specify` block drive - and sim_postsynthesis disables
-# those (+nospecify +notimingcheck), leaving the memories dead (Z/X).
-vlog -work "$PDK_LIB" +define+FUNCTIONAL "${MODEL_FILES[@]}"
+# This is a zero-delay functional simulation (no SDF), like the rest of
+# sim_postsynthesis, whose own +nospecify +notimingcheck vlog_options do NOT
+# reach this separate vlog call. Without them, the models' specify blocks
+# stay active: their placeholder path delays and $setuphold limits fire
+# spurious violations, and the notifiers turn flops/SRAM contents into X.
+# FUNCTIONAL additionally wires the SRAM macros' (RM_IHPSG13_1P_*)
+# behavioral core to the undelayed pins instead of the A_*_DELAY nets.
+vlog -work "$PDK_LIB" +define+FUNCTIONAL +nospecify +notimingcheck "${MODEL_FILES[@]}"
