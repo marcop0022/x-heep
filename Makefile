@@ -372,6 +372,23 @@ questasim-run-postsynth:
 questasim-run-postsynth-app: app
 	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
 
+## Batch trace of the post-synthesis simulation for offline analysis: writes a
+## plain-text list of the CPU OBI ports and boot/SPI/UART pins (see
+## scripts/sim/modelsim/postsynth_trace.tcl) to postsynth_trace.lst.gz
+## in the sim build dir. Simulated time: POSTSYNTH_TRACE_TIME (default 1ms).
+POSTSYNTH_TRACE_TIME ?= 1ms
+questasim-trace-postsynth:
+	cd $(QUESTASIM_POSTSYNTH_DIR) && vsim -c \
+		-sv_lib ../../../hw/vendor/lowrisc/opentitan/hw/dv/dpi/uartdpi/uartdpi \
+		-sv_lib ../../../hw/vendor/pulp_platform/pulpissimo/rtl/tb/remote_bitbang/librbs \
+		-voptargs=+acc=npr +bus_conflict_off -L ihp_pdk_lib \
+		-gJTAG_DPI=0 -gUSE_EXTERNAL_DEVICE_EXAMPLE=1 \
+		+firmware=../../../sw/build/main.hex +boot_sel=1 \
+		-do "set TRACE_TIME $(POSTSYNTH_TRACE_TIME); do ../../../scripts/sim/modelsim/postsynth_trace.tcl" \
+		tb_top
+	gzip -f $(QUESTASIM_POSTSYNTH_DIR)/postsynth_trace.lst
+	@ls -la $(QUESTASIM_POSTSYNTH_DIR)/postsynth_trace.lst.gz
+
 ## Same as questasim-run-postsynth but using the HDL optimized compilation
 questasim-run-postsynth-opt:
 	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
