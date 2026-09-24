@@ -60,6 +60,20 @@ filesets:
     - x-heep:sim:sram_wrapper
     - x-heep:sim:pad_cells
 
+  # tech_cells_generic's own `rtl_sim` fileset (tc_sram, tc_clk_gating, ...)
+  # is gated on `target_sim`/`target_sim_sc`
+  # (see hw/vendor/pulp_platform_tech_cells_generic.core), so depending on
+  # `pulp-platform.org::tech_cells_generic` from a differently-named target
+  # (like `sim_postsynthesis`) pulls in nothing. Reference the files
+  # directly instead - the same workaround `rtl-sky130` below already uses.
+  # Needed by testharness.sv's "external device example" block
+  # (slow_memory's tc_sram, dma's tc_clk_gating), independently of the DUT.
+  tb-tech-cells-sim:
+    files:
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_clk.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_sram.sv
+    file_type: systemVerilogSource
+
   x_heep_system:
     depend:
     - x-heep::packages
@@ -482,15 +496,16 @@ targets:
     default_tool: modelsim
     description: QuestaSim post-synthesis (gate-level) simulation of the Yosys/IHP-SG13G2 netlist
     filesets:
-    # `files_rtl_generic` and `rtl-simulation` are NOT needed by the DUT
-    # itself (the netlist is self-contained), but `testharness.sv`'s
-    # "external device example" block (slow_memory, dma, dlc, im2col_spc,
-    # ams, iffifo, ...) instantiates shared leaf IP (xbar_varlat_*,
-    # tech_cells_generic's tc_sram/tc_clk_gating, lowrisc prim_subreg*/
+    # `files_rtl_generic` is NOT needed by the DUT itself (the netlist is
+    # self-contained), but `testharness.sv`'s "external device example"
+    # block (slow_memory, dma, dlc, im2col_spc, ams, iffifo, ...)
+    # instantiates shared leaf IP (xbar_varlat_*, lowrisc prim_subreg*/
     # prim_fifo_sync, the if_xif interface definition, ...) independently of
-    # the DUT, so they are still required to compile the testbench.
+    # the DUT, so it is still required to compile the testbench.
+    # `tb-tech-cells-sim` covers that same block's tc_sram/tc_clk_gating use
+    # (see its own comment above for why `rtl-simulation` doesn't).
     - files_rtl_generic
-    - rtl-simulation
+    - tb-tech-cells-sim
     - tb-utils
     - postsynthesis-netlist
     - postsynthesis-sim-shim
