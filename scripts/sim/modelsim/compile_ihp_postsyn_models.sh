@@ -83,4 +83,8 @@ printf '  %s\n' "${MODEL_FILES[@]}"
 
 vlib "$PDK_LIB"
 vmap "$PDK_LIB" "$PDK_LIB"
-vlog -work "$PDK_LIB" "${MODEL_FILES[@]}"
+# FUNCTIONAL: the SRAM macro models (RM_IHPSG13_1P_*) otherwise wire their
+# behavioral core to the A_*_DELAY nets, which only the $setuphold timing
+# checks of their `specify` block drive - and sim_postsynthesis disables
+# those (+nospecify +notimingcheck), leaving the memories dead (Z/X).
+vlog -work "$PDK_LIB" +define+FUNCTIONAL "${MODEL_FILES[@]}"
