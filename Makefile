@@ -54,6 +54,8 @@ QUESTASIM_DIR     = $(FUSESOC_BUILD_DIR)/sim-modelsim
 QUESTASIM_POSTSYNTH_DIR = $(FUSESOC_BUILD_DIR)/sim_postsynthesis-modelsim
 YOSYS_NETLIST_SRC = $(FUSESOC_BUILD_DIR)/asic_yosys_synthesis-yosys/asic_x_heep_system.v
 YOSYS_NETLIST_STAGED = implementation/yosys/netlist/x_heep_system_netlist.v
+# Cycle limit of the post-synthesis simulation (gate level is slow: bound it)
+POSTSYNTH_MAX_CYCLES ?= 5000000
 
 # Project options are based on the app to be built (default - hello_world)
 PROJECT ?= hello_world
@@ -348,6 +350,7 @@ yosys-ihp130-stage-netlist:
 	mkdir -p implementation/yosys/netlist
 	cp $(YOSYS_NETLIST_SRC) $(YOSYS_NETLIST_STAGED)
 	@! grep -nE '^\s*assert\s*\(' $(YOSYS_NETLIST_STAGED) | head -5 | grep . || (echo "ERROR: netlist still contains assert statements - re-run 'make yosys-ihp130' (chformal -remove)" && exit 1)
+	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $(YOSYS_NETLIST_STAGED)
 	$(PYTHON) scripts/sim/modelsim/generate_postsyn_sim_shim.py
 
 ## Questasim post-synthesis (gate-level) simulation build of the Yosys/IHP-SG13G2 netlist.
@@ -363,15 +366,15 @@ questasim-build-postsynth-opt: questasim-build-postsynth
 ## Launches the post-synthesis gate-level simulation with the compiled firmware
 ## (`app` target), booting from flash (JTAG force-load does not survive synthesis).
 questasim-run-postsynth:
-	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1"
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
 
 ## First builds the app and then uses Questasim to gate-level simulate the netlist and run the FW
 questasim-run-postsynth-app: app
-	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1"
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
 
 ## Same as questasim-run-postsynth but using the HDL optimized compilation
 questasim-run-postsynth-opt:
-	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1"
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 
