@@ -433,6 +433,24 @@ questasim-trace-postsynth:
 	gzip -f $(QUESTASIM_POSTSYNTH_DIR)/postsynth_trace.lst
 	@ls -la $(QUESTASIM_POSTSYNTH_DIR)/postsynth_trace.lst.gz
 
+## X-source finder for the post-synthesis simulation: lists the module ports that are X/Z at
+## XFIND_T1 and those that turn X/Z by XFIND_T2 (scripts/sim/modelsim/postsynth_xfind.tcl),
+## in postsynth_xfind.txt.gz in the sim build dir. Pick T1/T2 around the first X seen in a trace.
+## @param XFIND_T1=<time>(default 600ns) XFIND_T2=<time>(default 615ns, same unit)
+XFIND_T1 ?= 600ns
+XFIND_T2 ?= 615ns
+questasim-xfind-postsynth:
+	cd $(QUESTASIM_POSTSYNTH_DIR) && vsim -c \
+		-sv_lib ../../../hw/vendor/lowrisc/opentitan/hw/dv/dpi/uartdpi/uartdpi \
+		-sv_lib ../../../hw/vendor/pulp_platform/pulpissimo/rtl/tb/remote_bitbang/librbs \
+		-voptargs=+acc=npr +bus_conflict_off -L pdk_lib \
+		-gJTAG_DPI=0 -gUSE_EXTERNAL_DEVICE_EXAMPLE=1 \
+		+firmware=../../../sw/build/main.hex +boot_sel=1 \
+		-do "set XFIND_T1 $(XFIND_T1); set XFIND_T2 $(XFIND_T2); do ../../../scripts/sim/modelsim/postsynth_xfind.tcl" \
+		tb_top
+	gzip -f $(QUESTASIM_POSTSYNTH_DIR)/postsynth_xfind.txt
+	@ls -la $(QUESTASIM_POSTSYNTH_DIR)/postsynth_xfind.txt.gz
+
 ## Same as questasim-run-postsynth but using the HDL optimized compilation
 questasim-run-postsynth-opt:
 	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
