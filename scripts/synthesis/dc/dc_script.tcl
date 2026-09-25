@@ -71,12 +71,18 @@ if {[catch {
   report_clocks > ${REPORT_DIR}/clocks.rpt
   check_timing > ${REPORT_DIR}/check_timing.rpt
 
-  # Drive constant and feedthrough port nets of every module with real cells
-  # (tie cells / buffers). Otherwise constant output bits of a hierarchical
-  # module (e.g. the always-zero low bits of the CPU fetch address) can be
-  # written to the netlist with no driver at all: they simulate as Z, and the
-  # bus logic they feed turns X (seen on dc-ihp130). Also needed for PnR.
-  # The tie cells must be usable for that.
+  # Constant outputs of hierarchical modules (e.g. the always-zero low bits of
+  # the CPU fetch/data addresses) must stay driven, by tie cells, inside the
+  # module that produces them. By default DC propagates such constants across
+  # hierarchy boundaries even with -no_boundary_optimization, disconnects the
+  # producer's pins (SYNOPSYS_UNCONNECTED) and left the consumer's port bits
+  # with no driver at all: Z in simulation, X on the bus after the first
+  # fetch (seen on dc-ihp130). Keep constants local, uniquify first so the
+  # port-net fixing below applies to every (uniquified) design, and let tie
+  # cells / buffers drive constant and feedthrough port nets (also needed
+  # for PnR).
+  catch {set_app_var compile_enable_constant_propagation_with_no_boundary_opt false}
+  uniquify
   foreach pattern {*/*tie* */*TIE*} {
     set ties [get_lib_cells -quiet $pattern]
     if {[sizeof_collection $ties] > 0} {
@@ -96,6 +102,15 @@ if {[catch {
     compile_ultra -no_autoungroup -no_boundary_optimization
   }
   check_design > ${REPORT_DIR}/check_design_compile.rpt
+  # Undriven nets simulate as Z (see the constant-propagation note above):
+  # surface them here rather than as X in the gate-level simulation.
+  set fh [open ${REPORT_DIR}/check_design_compile.rpt r]
+  set undriven [lsearch -all -inline [split [read $fh] "\n"] "*no driver*"]
+  close $fh
+  if {[llength $undriven] > 0} {
+    puts "\[x-heep] WARNING: [llength $undriven] undriven net(s) after compile (see ${REPORT_DIR}/check_design_compile.rpt), e.g.:"
+    foreach l [lrange $undriven 0 4] { puts "  $l" }
+  }
 
   # Outputs
   change_names -rules verilog -hierarchy
