@@ -18,7 +18,10 @@ module sram_wrapper #(
     input  logic [3:0] be_i,
     input  logic pwrgate_ni,
     output logic pwrgate_ack_no,
-    input  logic [core_v_mini_mcu_pkg::NUM_BANKS-1:0] set_retentive_ni,
+    // One bit per bank, as connected by memory_subsystem (and as in the other
+    // technologies' wrappers). No package reference: this file may be analyzed
+    // (by Design Compiler, one file at a time) before core_v_mini_mcu_pkg.
+    input  logic set_retentive_ni,
     // output ports
     output logic [31:0] rdata_o
 );

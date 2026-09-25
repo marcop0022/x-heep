@@ -46,7 +46,19 @@ if {[catch {
   # RTL
   remove_design -all
   define_design_lib WORK -path ./work
-  source ${READ_SOURCES}.tcl
+  # Run the edalize read-sources script one command at a time, stopping at the
+  # first failed `analyze` (which would otherwise only surface later as an
+  # unresolved reference at link time).
+  set fh [open ${READ_SOURCES}.tcl r]
+  set read_cmds [split [read $fh] "\n"]
+  close $fh
+  foreach cmd $read_cmds {
+    if {[string trim $cmd] eq "" || [string match "#*" [string trim $cmd]]} { continue }
+    set res [uplevel #0 $cmd]
+    if {[string match "analyze *" [string trim $cmd]] && !$res} {
+      error "analyze failed (see the Error messages above): $cmd"
+    }
+  }
   if {![analyze -format sverilog $synth_top.sv]} { error "analyze of $synth_top.sv failed" }
   if {![elaborate $synth_top]} { error "elaboration of $synth_top failed" }
   current_design $synth_top
