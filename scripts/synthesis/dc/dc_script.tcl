@@ -80,8 +80,9 @@ if {[catch {
   foreach pattern {*/*tie* */*TIE*} {
     set ties [get_lib_cells -quiet $pattern]
     if {[sizeof_collection $ties] > 0} {
-      set_dont_use $ties false
-      set_dont_touch $ties false
+      # (set_dont_use cannot clear the attribute: remove it; not set -> ignored)
+      catch {remove_attribute $ties dont_use}
+      catch {remove_attribute $ties dont_touch}
     }
   }
   set_fix_multiple_port_nets -all -buffer_constants [get_designs *]
