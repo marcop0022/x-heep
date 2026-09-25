@@ -71,6 +71,22 @@ if {[catch {
   report_clocks > ${REPORT_DIR}/clocks.rpt
   check_timing > ${REPORT_DIR}/check_timing.rpt
 
+  # Drive constant and feedthrough port nets of every module with real cells
+  # (tie cells / buffers). Otherwise constant output bits of a hierarchical
+  # module (e.g. the always-zero low bits of the CPU fetch address) can be
+  # written to the netlist with no driver at all: they simulate as Z, and the
+  # bus logic they feed turns X (seen on dc-ihp130). Also needed for PnR.
+  # The tie cells must be usable for that.
+  foreach pattern {*/*tie* */*TIE*} {
+    set ties [get_lib_cells -quiet $pattern]
+    if {[sizeof_collection $ties] > 0} {
+      set_dont_use $ties false
+      set_dont_touch $ties false
+    }
+  }
+  set_fix_multiple_port_nets -all -buffer_constants [get_designs *]
+  set_app_var verilogout_no_tri true
+
   # Compile
   if {$TECH_DC_GATE_CLOCK} {
     set_clock_gating_style -minimum_bitwidth 3 -positive_edge_logic integrated -control_point before
