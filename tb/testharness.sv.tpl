@@ -120,6 +120,21 @@ module testharness #(
   wire [1:0] spi_csb;
   wire spi_sck;
 
+`ifndef VERILATOR
+  // Board-level pulls on the SPI bus, which loops the SPI host pins back to
+  // the SPI slave pins and floats until the host enables its drivers. RTL
+  // simulation tolerates the floating (Z -> X) inputs, gate level does not:
+  // the SPI slave is a bus master (via the debug subsystem), and X on its
+  // cs/sclk turned its OBI request, and then the whole system bus, X.
+  pullup (spi_csb[0]);
+  pullup (spi_csb[1]);
+  pulldown (spi_sck);
+  pullup (spi_sd_io[0]);
+  pullup (spi_sd_io[1]);
+  pullup (spi_sd_io[2]);
+  pullup (spi_sd_io[3]);
+`endif
+
   logic iffifo_in_ready, iffifo_out_valid;
   logic iffifo_int_o;
 
