@@ -8,9 +8,17 @@ name: "technology::prim_ihp-sg13g2"
 description: "IHP-SG13G2 technology-specific primitive wrappers (clock cells, SRAM macro wrapper, IO pad cells)"
 
 filesets:
-  pdk_std_cells:
+  # Yosys only: black-box stubs of the hard cells, so the generic (no-PDK)
+  # flow elaborates; replaced by the Liberty views when $IHP130 is set.
+  # Never read by Design Compiler, which would take these empty modules for
+  # the real library cells.
+  pdk_stubs:
     files:
       - rtl/cells/ihp_sg13g2_blackbox_stubs.sv  # black-box stubs for the hard cells (no PDK views)
+    file_type: systemVerilogSource
+
+  pdk_std_cells:
+    files:
       - rtl/cells/prim_ihp_sg13g2_clk.sv        # technology clock cells (gating/inv/mux)
       - rtl/cells/sram_wrapper_ihp_sg13g2.sv    # wrapper around the RM_IHPSG13_1P_* SRAM macros
     file_type: systemVerilogSource
@@ -26,5 +34,8 @@ filesets:
 targets:
   default:
     filesets:
-      - target_asic_yosys_synthesis ? (pdk_std_cells)
-      - target_asic_yosys_synthesis ? (pdk_io_cells)
+      - target_asic_yosys_ihp130 ? (pdk_stubs)
+      - target_asic_yosys_ihp130 ? (pdk_std_cells)
+      - target_asic_yosys_ihp130 ? (pdk_io_cells)
+      - target_asic_dc_ihp130 ? (pdk_std_cells)
+      - target_asic_dc_ihp130 ? (pdk_io_cells)

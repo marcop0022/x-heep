@@ -1,4 +1,5 @@
-# Yosys synthesis template for the X-HEEP standalone ASIC flow (IHP-SG13G2 target).
+# Yosys synthesis template for the X-HEEP ASIC flows `asic_yosys_<tech>`
+# (tech: ihp130 = IHP-SG13G2, tsmc65 = TSMC 65nm LP; see `make yosys-<tech>`).
 #
 # Invoked by the edalize `yosys` backend as: yosys -p 'tcl edalize_yosys_template.tcl'
 # Because a custom `yosys_template` is set in core-v-mini-mcu.core, edalize does NOT
@@ -19,6 +20,14 @@ echo on
 # interpreter; we sidestep that by invoking every yosys pass with the `yosys` prefix
 # (which goes straight to yosys' command dispatch, not the Tcl proc).
 source edalize_yosys_procs.tcl
+
+# Target technology: asic_tech.tcl (`set ASIC_TECH <tech>`) is written in the
+# build directory by the fusesoc target's `asic_tech_<tech>` pre_build hook.
+# Its description (Liberty files, ...) is scripts/asic/tech/<tech>.tcl.
+set ASIC_TECH ihp130
+if {[file exists asic_tech.tcl]} { source asic_tech.tcl }
+source ../../../scripts/asic/tech/$ASIC_TECH.tcl
+puts "\[x-heep] target technology: $ASIC_TECH"
 
 # `x_heep_system` (the actual RTL top, and the module name `$top` resolves to
 # for this target) cannot be a synthesis top on its own: it exposes 6
@@ -61,51 +70,45 @@ read_slang --top $synth_top \
 yosys chformal -remove
 
 # `--ignore-unknown-modules` above lets slang emit the not-yet-mapped PDK
-# primitives (sg13g2_* std cells / IO pads, RM_IHPSG13_1P_* SRAM macros) as
-# black boxes, so `synth` does not error on their missing definitions.
+# primitives (std cells, IO pads, SRAM macros instantiated by the technology
+# wrappers in hw/asic/<tech>/) as black boxes, so `synth` does not error on
+# their missing definitions.
 
-# Standard-cell technology mapping is gated on the `IHP130` environment variable.
-#   - IHP130 set  -> it must point to the IHP-SG13G2 PDK root (the directory that
-#                    contains `libs.ref/`, or its parent). The Liberty views of the
-#                    std cells and SRAM macros are loaded, and the netlist is mapped
-#                    onto real sg13g2_* cells. Output is PDK-derived: keep it private.
-#   - IHP130 unset -> generic netlist, PDK cells (sg13g2_*, RM_IHPSG13_1P_*) stay as
-#                    black boxes. Safe to run / push publicly (no PDK data in the output).
-if {[info exists ::env(IHP130)] && $::env(IHP130) ne ""} {
-	set ihp130_root $::env(IHP130)
-
-	# Locate libs.ref/ (accept either the PDK root or its ihp-sg13g2/ subdir).
-	set libs_ref ""
-	foreach cand [list $ihp130_root/libs.ref $ihp130_root/ihp-sg13g2/libs.ref] {
-		if {[file isdirectory $cand]} { set libs_ref $cand; break }
-	}
-	if {$libs_ref eq ""} {
-		error "IHP130 is set to '$ihp130_root' but no libs.ref/ directory was found under it."
-	}
-
-	set stdcell_lib $libs_ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib
-	if {![file exists $stdcell_lib]} {
-		error "IHP130 std-cell Liberty not found: $stdcell_lib"
-	}
-
+# Standard-cell technology mapping is gated on the technology's kit variable
+# ($TECH_ROOT_VAR: IHP130 or TSMC65, see scripts/asic/tech/<tech>.tcl).
+#   - set   -> the Liberty views of the std cells and of the hard cells the RTL
+#              instantiates (SRAM macros, and for tsmc65 the IO pads) are loaded,
+#              and the netlist is mapped onto real library cells. Output is
+#              PDK-derived: keep it private.
+#   - unset -> ihp130 only: generic netlist, PDK cells (sg13g2_*, RM_IHPSG13_1P_*)
+#              stay as black boxes. Safe to run / push publicly (no PDK data in
+#              the output). The tsmc65 flow requires its kit.
+if {[asic_env $TECH_ROOT_VAR] ne ""} {
 	# Load the cell interfaces + timing before mapping. `-lib` = no netlists,
 	# `-overwrite` replaces the placeholder black-box stubs read from SystemVerilog.
-	puts "\[x-heep] IHP130 set: reading Liberty from $libs_ref"
+	set stdcell_libs [tech_stdcell_libs]
+	set stdcell_lib [lindex $stdcell_libs 0]
+	if {[llength $stdcell_libs] > 1} {
+		puts "\[x-heep] WARNING: several std-cell Liberty files, mapping onto the first: $stdcell_lib"
+	}
+	puts "\[x-heep] std-cell Liberty: $stdcell_lib"
 	yosys read_liberty -lib -overwrite $stdcell_lib
 
-	# SRAM macros: read every typ-corner Liberty the PDK ships (blackbox, timing only).
-	foreach sram_lib [lsort [glob -nocomplain $libs_ref/sg13g2_sram/lib/*_typ_1p20V_25C.lib]] {
-		puts "\[x-heep] SRAM Liberty: $sram_lib"
-		yosys read_liberty -lib -overwrite $sram_lib
+	# Hard cells instantiated by the RTL (blackbox, timing only).
+	foreach macro_lib [tech_yosys_macro_libs] {
+		puts "\[x-heep] hard-cell Liberty: $macro_lib"
+		yosys read_liberty -lib -overwrite $macro_lib
 	}
 
 	yosys synth -top $synth_top
 	yosys dfflibmap -liberty $stdcell_lib
 	yosys abc -liberty $stdcell_lib
 	yosys clean
-} else {
+} elseif {$ASIC_TECH eq "ihp130"} {
 	puts "\[x-heep] IHP130 not set: generic synthesis, PDK cells left as black boxes."
 	yosys synth -top $synth_top
+} else {
+	error "\[x-heep] \$$TECH_ROOT_VAR is not set: the $ASIC_TECH flow needs its design kit (see scripts/asic/tech/$ASIC_TECH.tcl)."
 }
 
 # NOTE: hierarchy is deliberately kept (no `-flatten`), like the DC flow's
@@ -118,7 +121,7 @@ if {[info exists ::env(IHP130)] && $::env(IHP130) ne ""} {
 # back to `x_heep_system`. Synthesis also elaborates away all of its
 # parameters, so it can no longer accept the parameter overrides
 # `testharness.sv` passes when instantiating `x_heep_system` - a separate,
-# simulation-only shim module (generated by `make yosys-ihp130-stage-netlist`,
+# simulation-only shim module (generated by `make yosys-<tech>-stage-netlist`,
 # see scripts/sim/modelsim/generate_postsyn_sim_shim.py) reintroduces them
 # and instantiates this netlist underneath. See the `postsynthesis-sim-shim`
 # fileset in core-v-mini-mcu.core for details.

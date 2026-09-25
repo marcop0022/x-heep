@@ -52,8 +52,17 @@ FUSESOC_BUILD_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name 'openhwg
 VERILATOR_DIR     = $(FUSESOC_BUILD_DIR)/sim-verilator
 QUESTASIM_DIR     = $(FUSESOC_BUILD_DIR)/sim-modelsim
 QUESTASIM_POSTSYNTH_DIR = $(FUSESOC_BUILD_DIR)/sim_postsynthesis-modelsim
-YOSYS_NETLIST_SRC = $(FUSESOC_BUILD_DIR)/asic_yosys_synthesis-yosys/asic_x_heep_system.v
-YOSYS_NETLIST_STAGED = implementation/yosys/netlist/x_heep_system_netlist.v
+# ASIC synthesis flows `<tool>-<tech>` (see the ASIC section below)
+ASIC_FLOWS = yosys-ihp130 yosys-tsmc65 dc-ihp130 dc-tsmc65
+# fusesoc target, technology and output netlist of a flow ($1 = <tool>-<tech>)
+asic_target  = asic_$(subst -,_,$1)
+asic_tech    = $(word 2,$(subst -, ,$1))
+asic_netlist = $(FUSESOC_BUILD_DIR)/$(call asic_target,$1)-$(if $(filter yosys-%,$1),yosys/asic_x_heep_system.v,design_compiler/x_heep_system_netlist.v)
+# Netlist staged for the post-synthesis simulation (sim_postsynthesis target)
+POSTSYNTH_DIR     = implementation/postsynth
+POSTSYNTH_NETLIST = $(POSTSYNTH_DIR)/x_heep_system_netlist.v
+# Technology of `make asic-tech-check` / `make asic-tech-db`
+TECH ?= ihp130
 # Cycle limit of the post-synthesis simulation (gate level is slow: bound it)
 POSTSYNTH_MAX_CYCLES ?= 5000000
 
@@ -333,30 +342,65 @@ vivado-fpga-remote-pgm:
 asic:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=asic_synthesis $(FUSESOC_FLAGS) --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee builddesigncompiler.log
 
-## Runs a standalone Yosys synthesis of X-HEEP targeting the IHP-SG13G2 technology.
-## The netlist is written to the fusesoc build dir as asic_x_heep_system.v (and yosys.v),
-## with `x_heep_system_synth_top` as its top module.
+## ASIC synthesis flows `<tool>-<tech>`: tool = yosys | dc (Synopsys Design Compiler),
+## tech = ihp130 (IHP-SG13G2, design kit in $IHP130) | tsmc65 (TSMC 65nm LP, design kit in $TSMC65).
+## Each writes a hierarchical netlist (top: x_heep_system_synth_top) in its fusesoc build dir;
+## `make <tool>-<tech>-stage-netlist` then prepares it for questasim-build-postsynth.
+## See scripts/asic/README.md.
+
+## Yosys synthesis for IHP-SG13G2 (generic, black-box netlist if $IHP130 is unset)
 yosys-ihp130:
-	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildyosys.log
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=$(call asic_target,$@) openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
 
-## Stages the netlist produced by `yosys-ihp130` at the fixed path read by the
-## `sim_postsynthesis` fusesoc target (postsynthesis-netlist fileset).
-## Run this after every `yosys-ihp130` re-run, before questasim-build-postsynth.
-## Also (re)generates the simulation-only shim that reintroduces x_heep_system's
-## parameter list around the netlist (see scripts/sim/modelsim/generate_postsyn_sim_shim.py);
-## requires x_heep_system.sv, i.e. `make mcu-gen` already run.
-yosys-ihp130-stage-netlist:
-	@test -f "$(YOSYS_NETLIST_SRC)" || (echo "ERROR: $(YOSYS_NETLIST_SRC) not found - run 'make yosys-ihp130' first" && exit 1)
-	mkdir -p implementation/yosys/netlist
-	cp $(YOSYS_NETLIST_SRC) $(YOSYS_NETLIST_STAGED)
-	@! grep -nE '^\s*assert\s*\(' $(YOSYS_NETLIST_STAGED) | head -5 | grep . || (echo "ERROR: netlist still contains assert statements - re-run 'make yosys-ihp130' (chformal -remove)" && exit 1)
-	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $(YOSYS_NETLIST_STAGED)
+## Yosys synthesis for TSMC 65nm LP (needs $TSMC65)
+yosys-tsmc65:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=$(call asic_target,$@) openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+
+## Design Compiler synthesis for IHP-SG13G2 (needs $IHP130 and, once, `make asic-tech-db TECH=ihp130`)
+## @param ASIC_CLK_PERIOD=<ns>(default 20)
+dc-ihp130:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=$(call asic_target,$@) $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+
+## Design Compiler synthesis for TSMC 65nm LP (needs $TSMC65)
+## @param ASIC_CLK_PERIOD=<ns>(default 10)
+dc-tsmc65:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=$(call asic_target,$@) $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+
+## Prints what the ASIC flows find in the design kit of TECH, and what is missing (needs tclsh)
+## @param TECH=[ihp130(default),tsmc65]
+asic-tech-check:
+	tclsh scripts/asic/tech/query.tcl $(TECH) check
+
+## Converts the Liberty files Design Compiler needs into .db, in build/tech_db/TECH (needs lc_shell).
+## Needed once for ihp130, whose PDK ships Liberty only.
+## @param TECH=[ihp130(default),tsmc65]
+asic-tech-db:
+	mkdir -p $(BUILD_DIR)/tech_db
+	cd $(BUILD_DIR)/tech_db && ASIC_TECH_TCL=$(mkfile_path)/scripts/asic/tech/$(TECH).tcl lc_shell -f $(mkfile_path)/scripts/asic/lib2db.tcl 2>&1 | tee lib2db-$(TECH).log
+
+## Stages the netlist of `<tool>-<tech>` (e.g. `make dc-tsmc65-stage-netlist`) at the fixed path read
+## by the `sim_postsynthesis` fusesoc target, records its technology (implementation/postsynth/asic_tech),
+## prefixes its modules (they must not collide with the RTL the testbench compiles) and (re)generates the
+## simulation-only shim that reintroduces x_heep_system's parameter list around it
+## (see scripts/sim/modelsim/generate_postsyn_sim_shim.py). Run it after every synthesis re-run,
+## before questasim-build-postsynth; requires x_heep_system.sv, i.e. `make mcu-gen` already run.
+%-stage-netlist:
+	@$(if $(filter $*,$(ASIC_FLOWS)),true,echo "ERROR: unknown flow '$*' (one of: $(ASIC_FLOWS))" && exit 1)
+	@test -f "$(call asic_netlist,$*)" || (echo "ERROR: $(call asic_netlist,$*) not found - run 'make $*' first" && exit 1)
+	mkdir -p $(POSTSYNTH_DIR)
+	cp $(call asic_netlist,$*) $(POSTSYNTH_NETLIST)
+	echo $(call asic_tech,$*) > $(POSTSYNTH_DIR)/asic_tech
+	@! grep -nE '^\s*assert\s*\(' $(POSTSYNTH_NETLIST) | head -5 | grep . || (echo "ERROR: netlist still contains assert statements - re-run 'make $*'" && exit 1)
+	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $(POSTSYNTH_NETLIST)
 	$(PYTHON) scripts/sim/modelsim/generate_postsyn_sim_shim.py
+	@echo "Staged $* netlist ($(call asic_tech,$*)) in $(POSTSYNTH_DIR)"
 
-## Questasim post-synthesis (gate-level) simulation build of the Yosys/IHP-SG13G2 netlist.
-## Requires: `make yosys-ihp130 yosys-ihp130-stage-netlist` already run, and
-## $IHP130 set to the IHP-SG13G2 PDK root (see scripts/sim/modelsim/compile_ihp_postsyn_models.sh).
+## Questasim post-synthesis (gate-level) simulation build of the staged netlist.
+## Requires: `make <tool>-<tech> <tool>-<tech>-stage-netlist` already run, and the design kit of
+## that technology exported ($IHP130 / $TSMC65, see scripts/sim/modelsim/compile_postsyn_models.sh).
+## The previous build is always removed first (its Makefile would otherwise skip the recompilation).
 questasim-build-postsynth:
+	$(if $(FUSESOC_BUILD_DIR),rm -rf $(QUESTASIM_POSTSYNTH_DIR))
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth.log
 
 ## Questasim post-synthesis simulation with HDL optimized compilation
@@ -381,7 +425,7 @@ questasim-trace-postsynth:
 	cd $(QUESTASIM_POSTSYNTH_DIR) && vsim -c \
 		-sv_lib ../../../hw/vendor/lowrisc/opentitan/hw/dv/dpi/uartdpi/uartdpi \
 		-sv_lib ../../../hw/vendor/pulp_platform/pulpissimo/rtl/tb/remote_bitbang/librbs \
-		-voptargs=+acc=npr +bus_conflict_off -L ihp_pdk_lib \
+		-voptargs=+acc=npr +bus_conflict_off -L pdk_lib \
 		-gJTAG_DPI=0 -gUSE_EXTERNAL_DEVICE_EXAMPLE=1 \
 		+firmware=../../../sw/build/main.hex +boot_sel=1 \
 		-do "set TRACE_TIME $(POSTSYNTH_TRACE_TIME); do ../../../scripts/sim/modelsim/postsynth_trace.tcl" \

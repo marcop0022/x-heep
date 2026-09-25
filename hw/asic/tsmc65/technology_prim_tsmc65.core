@@ -1,0 +1,28 @@
+CAPI=2:
+
+# Copyright 2022 OpenHW Group
+# Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
+# SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
+
+name: "technology::prim_tsmc65"
+description: "TSMC 65nm LP technology-specific primitive wrappers (clock cells, SRAM macro wrapper, IO pad cells)"
+
+# The library cells/macros instantiated here (tcbn65lplvt, tpdn65lpnv2od3,
+# TS1N65LPLL*) are resolved at synthesis time from the design kit found via
+# $TSMC65 (see scripts/asic/tech/tsmc65.tcl); no PDK file lives in this repo.
+
+filesets:
+  tech_cells:
+    files:
+      - rtl/prim_tsmc65_clk.sv        # technology clock cells (gating/inv/mux/xor)
+      - rtl/sram_wrapper_tsmc65.sv    # wrapper around the TS1N65LPLL* SRAM macros
+      - rtl/pad_cell_input_tsmc65.sv  # pad_cell_input  -> PDUW0204CDG
+      - rtl/pad_cell_output_tsmc65.sv # pad_cell_output -> PDUW0204CDG
+      - rtl/pad_cell_inout_tsmc65.sv  # pad_cell_inout  -> PDUW0204CDG
+    file_type: systemVerilogSource
+
+targets:
+  default:
+    filesets:
+      - target_asic_yosys_tsmc65 ? (tech_cells)
+      - target_asic_dc_tsmc65 ? (tech_cells)

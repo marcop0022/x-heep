@@ -3,8 +3,7 @@
 build/
 
 # Staged post-synthesis netlist + generated sim shim (PDK-derived / regenerated, do not commit)
-implementation/yosys/netlist/*.v
-implementation/yosys/netlist/*.sv
+implementation/postsynth/
 *.so
 *.hex
 *.elf

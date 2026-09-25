@@ -3,11 +3,11 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Run by `make yosys-ihp130-stage-netlist` on the STAGED (simulation) copy of
-# the Yosys netlist, in place.
+# Run by `make <tool>-<tech>-stage-netlist` on the STAGED (simulation) copy of
+# the netlist, in place.
 #
-# The netlist keeps its hierarchy (no `-flatten`, see
-# edalize_yosys_template.tcl), so it defines one module per synthesized RTL
+# The netlists of all ASIC flows keep their hierarchy (yosys: no `-flatten`;
+# DC: -no_autoungroup), so they define one module per synthesized RTL
 # module, mostly under their RTL names (prim_fifo_sync, tc_clk_gating,
 # x_heep_system, ...). The `sim_postsynthesis` target also compiles part of
 # the RTL (for testharness.sv's external device example) into the same
@@ -21,11 +21,12 @@ import re
 import sys
 from pathlib import Path
 
-NETLIST = Path(sys.argv[1] if len(sys.argv) > 1 else "implementation/yosys/netlist/x_heep_system_netlist.v")
+NETLIST = Path(sys.argv[1] if len(sys.argv) > 1 else "implementation/postsynth/x_heep_system_netlist.v")
 PREFIX = "ps_"
 TOP = "x_heep_system_synth_top"
-# Names that must resolve to the PDK models in ihp_pdk_lib, never to a module
-# of the netlist itself.
+# Names that must resolve to the PDK models in pdk_lib, never to a module of
+# the netlist itself (IHP cells; TSMC cell names have no common prefix to
+# check, but DC/yosys never write library cells as netlist modules).
 PDK_RE = re.compile(r"^\\?(sg13g2_|RM_IHPSG13)")
 
 IDENT = r"(\\\S+|[A-Za-z_][\w$]*)"
@@ -51,7 +52,7 @@ def main() -> None:
     pdk = sorted(n for n in defined if PDK_RE.match(n))
     if pdk:
         sys.exit(f"ERROR: {NETLIST} defines PDK cell modules, which would shadow the "
-                 f"PDK models in ihp_pdk_lib: {', '.join(pdk[:10])}")
+                 f"PDK models in pdk_lib: {', '.join(pdk[:10])}")
     if TOP not in defined:
         sys.exit(f"ERROR: top module '{TOP}' not found in {NETLIST}")
 

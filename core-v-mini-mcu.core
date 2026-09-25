@@ -118,6 +118,10 @@ filesets:
     depend:
     - technology::prim_ihp-sg13g2
 
+  ip-asic-tsmc65:
+    depend:
+    - technology::prim_tsmc65
+
   # Chip-level wrapper used ONLY to give `x_heep_system` a synthesizable
   # boundary when it is NOT the direct synthesis top (kept for reference /
   # alternative flows). Not used by the `x_heep_system`-as-top flow below.
@@ -126,21 +130,23 @@ filesets:
     - hw/asic/ihp-sg13g2/rtl/asic_x_heep_system_wrapper.sv
     file_type: systemVerilogSource
 
-  # Post-synthesis gate-level netlist produced by the standalone Yosys ASIC
-  # flow (see `asic_yosys_synthesis` below), staged at a fixed path after
-  # each run (see `make yosys-ihp130-stage-netlist`). Its top module is
-  # `x_heep_system_synth_top` (see edalize_yosys_template.tcl): after
-  # `-flatten`, synthesis resolves away all of `x_heep_system`'s parameters,
-  # so this module can no longer accept the parameter overrides
-  # `testharness.sv` passes when instantiating `x_heep_system`. The
-  # `postsynthesis-sim-shim` fileset below bridges that gap.
+  # Post-synthesis gate-level netlist of one of the ASIC flows
+  # (`asic_{yosys,dc}_{ihp130,tsmc65}` below), staged at a fixed path after
+  # each run by `make <tool>-<tech>-stage-netlist`, which also records its
+  # technology in implementation/postsynth/asic_tech (read by the
+  # `pre_build_postsyn_models` hook). Its top module is
+  # `x_heep_system_synth_top` (see generate_xif_tieoff_wrapper.py):
+  # synthesis resolves away all of `x_heep_system`'s parameters, so this
+  # module can no longer accept the parameter overrides `testharness.sv`
+  # passes when instantiating `x_heep_system`. The `postsynthesis-sim-shim`
+  # fileset below bridges that gap.
   postsynthesis-netlist:
     files:
-    - implementation/yosys/netlist/x_heep_system_netlist.v
+    - implementation/postsynth/x_heep_system_netlist.v
     file_type: verilogSource
 
   # Simulation-only shim, generated alongside the netlist by
-  # `make yosys-ihp130-stage-netlist` (scripts/sim/modelsim/generate_postsyn_sim_shim.py).
+  # `make <tool>-<tech>-stage-netlist` (scripts/sim/modelsim/generate_postsyn_sim_shim.py).
   # It is module `x_heep_system` with the exact parameter/port list of the
   # RTL `x_heep_system` (so `testharness.sv`'s instantiation - including its
   # parameter overrides - still elaborates unchanged), and it simply
@@ -149,16 +155,17 @@ filesets:
   # parameters.
   postsynthesis-sim-shim:
     files:
-    - implementation/yosys/netlist/x_heep_system_postsyn_sim_shim.sv
+    - implementation/postsynth/x_heep_system_postsyn_sim_shim.sv
     file_type: systemVerilogSource
 
-  # Pre-build hook: vlog-compiles the IHP-SG13G2 PDK's functional Verilog
-  # simulation models (std cells, IO pads, SRAM macros) into the QuestaSim
-  # work library. Needed because their exact location under $IHP130 is only
-  # known at run time (see the script for the searched paths).
-  pre_build_ihp_postsyn_models:
+  # Pre-build hook: vlog-compiles the functional Verilog simulation models
+  # (std cells, IO pads, SRAM macros) of the staged netlist's technology into
+  # the separate QuestaSim library `pdk_lib`. Needed because their location
+  # in the design kit ($IHP130 / $TSMC65) is only known at run time (see
+  # scripts/asic/tech/<tech>.tcl).
+  pre_build_postsyn_models:
     files:
-    - scripts/sim/modelsim/compile_ihp_postsyn_models.sh
+    - scripts/sim/modelsim/compile_postsyn_models.sh
     file_type: user
 
   # Pre-build hook: generates x_heep_system_synth_top.sv, a synthesis-only
@@ -347,10 +354,10 @@ scripts:
     cmd:
     - python
     - ../../../scripts/sim/vcs/patch_vcs_ams_Makefile.py
-  pre_build_ihp_postsyn_models:
+  pre_build_postsyn_models:
     cmd:
     - sh
-    - ../../../scripts/sim/modelsim/compile_ihp_postsyn_models.sh
+    - ../../../scripts/sim/modelsim/compile_postsyn_models.sh
 
   # ASIC synthesis utils
   generate_yosys_filelist:
@@ -361,6 +368,18 @@ scripts:
     cmd:
     - python
     - ../../../scripts/synthesis/yosys/generate_xif_tieoff_wrapper.py
+  # Design Compiler variant: struct ports as plain vectors (see the script)
+  generate_xif_tieoff_wrapper_plain:
+    cmd:
+    - python
+    - ../../../scripts/synthesis/yosys/generate_xif_tieoff_wrapper.py
+    - --plain-ports
+  # Record the target technology in the build directory (asic_tech.tcl), read
+  # by the yosys template and the DC script (-> scripts/asic/tech/<tech>.tcl)
+  asic_tech_ihp130:
+    cmd: [sh, -c, "echo 'set ASIC_TECH ihp130' > asic_tech.tcl"]
+  asic_tech_tsmc65:
+    cmd: [sh, -c, "echo 'set ASIC_TECH tsmc65' > asic_tech.tcl"]
 
   # Simulation utils
   remove_uart_log:
@@ -474,27 +493,26 @@ targets:
           # Use the number of available cores (up to a max of 8) for parallel compilation, with a fallback to 4 if nproc is not available
           - '-j$(shell N=$$(nproc 2>/dev/null || echo 4); [ "$$N" -le 8 ] && echo "$$N" || echo 8)'
 
-  # Post-synthesis gate-level simulation of the netlist produced by
-  # `asic_yosys_synthesis` (top module `x_heep_system`). Since that netlist
-  # has the same module name/port list as the RTL `x_heep_system` fileset,
-  # it is swapped in for it here and `tb_top`/`testharness` are reused
-  # unmodified. Requirements:
-  #   - stage the netlist first: `make yosys-ihp130 yosys-ihp130-stage-netlist`
-  #     (copies the Yosys output to implementation/yosys/netlist/x_heep_system_netlist.v);
-  #   - set $IHP130 to the IHP-SG13G2 PDK root before building, so
-  #     scripts/sim/modelsim/compile_ihp_postsyn_models.sh can vlog-compile
-  #     the std-cell/IO-pad/SRAM functional Verilog models it references;
+  # Post-synthesis gate-level simulation of the netlist of one of the ASIC
+  # flows (`asic_{yosys,dc}_{ihp130,tsmc65}`), wrapped in a shim with the
+  # interface of the RTL `x_heep_system`, so `tb_top`/`testharness` are
+  # reused unmodified. Requirements:
+  #   - stage the netlist first: `make <tool>-<tech> <tool>-<tech>-stage-netlist`
+  #     (copies it to implementation/postsynth/, generates the shim and records
+  #     the technology in implementation/postsynth/asic_tech);
+  #   - export the design kit of that technology ($IHP130 / $TSMC65) before
+  #     building, so scripts/sim/modelsim/compile_postsyn_models.sh can
+  #     vlog-compile the std-cell/IO-pad/SRAM functional Verilog models it
+  #     references (see scripts/asic/tech/<tech>.tcl);
   #   - boot from flash (`+boot_sel=1` at run time): the JTAG force-load path
   #     (tb_loadHEX) pokes DUT-internal hierarchy that does not survive
   #     synthesis, while flash boot (load_flash_hex -> spiflash model) and
   #     real JTAG_DPI both stay at the pad level and work unchanged.
-  # NOTE: deliberately NOT built on `*default_target` (which pulls in
-  # `files_rtl_generic`, i.e. core_v_mini_mcu.sv and its ~25 RTL IP
-  # dependencies). The gate-level netlist is fully self-contained after
-  # synthesis/flattening, so none of the RTL sources are needed here.
+  # NOTE: deliberately NOT built on `*default_target`: the gate-level netlist
+  # is self-contained after synthesis (see the `files_rtl_generic` note below).
   sim_postsynthesis:
     default_tool: modelsim
-    description: QuestaSim post-synthesis (gate-level) simulation of the Yosys/IHP-SG13G2 netlist
+    description: QuestaSim post-synthesis (gate-level) simulation of the staged ASIC netlist
     filesets:
     # `files_rtl_generic` is NOT needed by the DUT itself (the netlist is
     # self-contained), but `testharness.sv`'s "external device example"
@@ -512,7 +530,7 @@ targets:
     - pre_build_remote_bitbang
     - pre_build_uartdpi
     - pre_patch_modelsim_Makefile
-    - pre_build_ihp_postsyn_models
+    - pre_build_postsyn_models
     - tb-sv
     toplevel: [tb_top]
     hooks:
@@ -520,7 +538,7 @@ targets:
         - tool_modelsim? (pre_build_uartdpi)
         - tool_modelsim? (pre_build_remote_bitbang)
         - tool_modelsim? (pre_patch_modelsim_Makefile) # this is required by Questa 2020 on
-        - tool_modelsim? (pre_build_ihp_postsyn_models)
+        - tool_modelsim? (pre_build_postsyn_models)
       pre_run:
         - remove_uart_log
       post_run:
@@ -550,10 +568,10 @@ targets:
         - -sv_lib ../../../hw/vendor/pulp_platform/pulpissimo/rtl/tb/remote_bitbang/librbs
         - -voptargs=+acc=npr
         - +bus_conflict_off
-        # Resolves the sg13g2_*/RM_IHPSG13_1P_* cell instances in the netlist
-        # against the library compiled by compile_ihp_postsyn_models.sh
-        # (kept separate from `work`, see that script for why).
-        - -L ihp_pdk_lib
+        # Resolves the library cell/macro instances in the netlist against
+        # the models compiled by compile_postsyn_models.sh (kept separate
+        # from `work`, see that script for why).
+        - -L pdk_lib
 
   sim_sc:
     <<: *default_target
@@ -732,10 +750,28 @@ targets:
         dc_script:
         - dc_script.tcl
 
-  asic_yosys_synthesis:
+  # ASIC synthesis flows: `asic_<tool>_<tech>`, tool = yosys | dc (Synopsys
+  # Design Compiler), tech = ihp130 (IHP-SG13G2) | tsmc65 (TSMC 65nm LP).
+  # Run them with `make <tool>-<tech>` (see the Makefile), which needs the
+  # design kit of the technology exported ($IHP130 / $TSMC65, see
+  # scripts/asic/tech/<tech>.tcl); every netlist can then be simulated with
+  # `make <tool>-<tech>-stage-netlist questasim-build-postsynth questasim-run-postsynth`.
+  # The technology cells come from `ip-asic-<tech>` (hw/asic/<tech>/), and the
+  # `asic_tech_<tech>` hook records the technology for the synthesis scripts.
+  # NOTE: the actual synthesis top is `x_heep_system_synth_top`, generated by
+  # the `generate_xif_tieoff_wrapper[_plain]` hook: `x_heep_system` exposes 6
+  # unconnected `if_xif` SystemVerilog interface ports at its boundary (used
+  # only when a CPU extension is enabled), which a synthesis top cannot have,
+  # so this thin wrapper ties them off. The output netlist module is therefore
+  # named `x_heep_system_synth_top`, NOT `x_heep_system` - a separate
+  # simulation-only shim (module `x_heep_system`, generated by
+  # `make <tool>-<tech>-stage-netlist`) bridges it back for `tb_top`/
+  # `testharness` in the `sim_postsynthesis` target; see the
+  # `postsynthesis-sim-shim` fileset for why.
+  asic_yosys_ihp130:
     <<: *default_target
     default_tool: yosys
-    description: Standalone Yosys synthesis of X-HEEP targeting the IHP-SG13G2 technology
+    description: Yosys synthesis of X-HEEP for IHP-SG13G2
     parameters:
       - SYNTHESIS=true
       - REMOVE_OBI_FIFO
@@ -747,21 +783,81 @@ targets:
       pre_build:
         - generate_yosys_filelist
         - generate_xif_tieoff_wrapper
-    # NOTE: the actual synthesis top is `x_heep_system_synth_top` (see
-    # edalize_yosys_template.tcl), generated by the `generate_xif_tieoff_wrapper`
-    # hook: `x_heep_system` exposes 6 unconnected `if_xif` SystemVerilog
-    # interface ports at its boundary (used only when a CPU extension is
-    # enabled), and slang refuses to elaborate a top-level module with those
-    # unbound, so this thin wrapper ties them off and is read_slang's real
-    # `--top`. The output netlist module is therefore named
-    # `x_heep_system_synth_top`, NOT `x_heep_system` - a separate
-    # simulation-only shim (module `x_heep_system`, generated by
-    # `make yosys-ihp130-stage-netlist`) bridges it back for `tb_top`/
-    # `testharness` in the `sim_postsynthesis` target below; see the
-    # `postsynthesis-sim-shim` fileset for why.
+        - asic_tech_ihp130
     toplevel: [x_heep_system]
-    tools:
+    tools: &asic_yosys_tools
       yosys:
         arch: generic
         output_format: verilog
         yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_template.tcl
+
+  asic_yosys_tsmc65:
+    <<: *default_target
+    default_tool: yosys
+    description: Yosys synthesis of X-HEEP for TSMC 65nm LP
+    parameters:
+      - SYNTHESIS=true
+      - REMOVE_OBI_FIFO
+    filesets_append:
+      - x_heep_system
+      - ip-asic-tsmc65
+      - generate_xif_tieoff_wrapper
+    hooks:
+      pre_build:
+        - generate_yosys_filelist
+        - generate_xif_tieoff_wrapper
+        - asic_tech_tsmc65
+    toplevel: [x_heep_system]
+    tools: *asic_yosys_tools
+
+  # Design Compiler: the edalize `design_compiler` backend analyzes the RTL of
+  # the target and sources scripts/synthesis/dc/dc_script.tcl, which also
+  # reads the generated top (plain-vector ports: see
+  # generate_xif_tieoff_wrapper.py --plain-ports) and writes
+  # x_heep_system_netlist.v in the build directory.
+  asic_dc_ihp130:
+    <<: *default_target
+    default_tool: design_compiler
+    description: Design Compiler synthesis of X-HEEP for IHP-SG13G2
+    parameters:
+      - SYNTHESIS=true
+      - REMOVE_OBI_FIFO
+      - ASSERTS_OFF
+      - COMMON_CELLS_ASSERTS_OFF
+    filesets_append:
+      - x_heep_system
+      - ip-asic-ihp
+      - generate_xif_tieoff_wrapper
+    hooks:
+      pre_build:
+        - generate_xif_tieoff_wrapper_plain
+        - asic_tech_ihp130
+    toplevel: [x_heep_system]
+    tools: &asic_dc_tools
+      design_compiler:
+        script_dir:
+        - ../../../scripts/synthesis/dc
+        report_dir:
+        - report
+        dc_script:
+        - dc_script.tcl
+
+  asic_dc_tsmc65:
+    <<: *default_target
+    default_tool: design_compiler
+    description: Design Compiler synthesis of X-HEEP for TSMC 65nm LP
+    parameters:
+      - SYNTHESIS=true
+      - REMOVE_OBI_FIFO
+      - ASSERTS_OFF
+      - COMMON_CELLS_ASSERTS_OFF
+    filesets_append:
+      - x_heep_system
+      - ip-asic-tsmc65
+      - generate_xif_tieoff_wrapper
+    hooks:
+      pre_build:
+        - generate_xif_tieoff_wrapper_plain
+        - asic_tech_tsmc65
+    toplevel: [x_heep_system]
+    tools: *asic_dc_tools
