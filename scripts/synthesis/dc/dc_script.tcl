@@ -10,7 +10,7 @@
 # analyzes the RTL of the fusesoc target) and REPORT_DIR. The pre_build hooks
 # of the target write, in the build directory (the current directory):
 #   asic_tech.tcl                `set ASIC_TECH <tech>`
-#   x_heep_system_synth_top.sv   the synthesis top (generate_xif_tieoff_wrapper.py
+#   x_heep_system_synth_top.sv   the synthesis top (generate_synth_top.py
 #                                --plain-ports: x_heep_system minus the xif
 #                                interface ports, struct ports as plain vectors)
 #

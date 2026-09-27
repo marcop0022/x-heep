@@ -9,7 +9,7 @@
 # it must be generated at staging time, same as the netlist copy itself).
 #
 # The top module of every ASIC flow's netlist is `x_heep_system_synth_top`
-# (see generate_xif_tieoff_wrapper.py): synthesis elaborates away all of
+# (see generate_synth_top.py): synthesis elaborates away all of
 # `x_heep_system`'s parameters, so it can no longer accept the
 # parameter overrides `testharness.sv` passes when instantiating
 # `x_heep_system` (EXT_XBAR_NMASTER, obi_req_t, ...) - QuestaSim fails with
@@ -22,7 +22,7 @@
 # (`x_heep_system_synth_top`) via `.*` - the shim's own parameters are inert
 # (never forwarded), and any of its ports absent from the netlist (the 6
 # `if_xif` interface ports, tied off during synthesis - see
-# generate_xif_tieoff_wrapper.py) are simply left unconnected by `.*`.
+# generate_synth_top.py) are simply left unconnected by `.*`.
 
 import re
 import sys

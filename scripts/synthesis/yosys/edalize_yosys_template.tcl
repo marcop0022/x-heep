@@ -33,8 +33,8 @@ puts "\[x-heep] target technology: $ASIC_TECH"
 # for this target) cannot be a synthesis top on its own: it exposes 6
 # unconnected SystemVerilog `interface` ports (the CV-X-IF eXtension
 # Interface), and slang refuses to elaborate a top-level interface port with
-# nothing bound to it. The `generate_xif_tieoff_wrapper` pre_build hook
-# (scripts/synthesis/yosys/generate_xif_tieoff_wrapper.py) generates
+# nothing bound to it. The `generate_synth_top` pre_build hook
+# (scripts/synthesis/generate_synth_top.py) generates
 # `x_heep_system_synth_top.sv`: a thin wrapper with the exact same
 # parameter/port list as `x_heep_system` minus those 6 ports (tied off
 # internally instead). We synthesize THAT as top; the netlist keeps this
