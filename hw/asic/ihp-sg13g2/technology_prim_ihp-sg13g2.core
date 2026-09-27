@@ -28,7 +28,6 @@ filesets:
       - rtl/cells/pad_cell_inout_ihp_sg13g2.sv   # pad_cell_inout  -> sg13g2_IOPadInOut4mA
       - rtl/cells/pad_cell_input_ihp_sg13g2.sv   # pad_cell_input  -> sg13g2_IOPadIn
       - rtl/cells/pad_cell_output_ihp_sg13g2.sv  # pad_cell_output -> sg13g2_IOPadOut4mA
-      - rtl/cells/pad_cell_power_ihp_sg13g2.sv   # pad_cell_{vdd,vss,iovdd,iovss}
     file_type: systemVerilogSource
 
 targets:

@@ -18,7 +18,7 @@
 #   - has the EXACT same parameter list and port list as `x_heep_system`,
 #     MINUS the 6 xif interface ports (extracted verbatim by text
 #     processing, so it always matches whatever `mcu-gen` produced - no
-#     manual upkeep, unlike hw/asic/ihp-sg13g2/rtl/asic_x_heep_system_wrapper.sv);
+#     manual upkeep);
 #   - instantiates `x_heep_system`, binding the 6 xif ports to internal
 #     `if_xif` instances (tied off / unused - fine, no CPU extension is
 #     enabled in the ASIC synthesis flows) and forwarding every other port 1:1.

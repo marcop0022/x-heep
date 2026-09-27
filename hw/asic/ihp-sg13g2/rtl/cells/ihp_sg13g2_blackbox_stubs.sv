@@ -69,11 +69,6 @@ module sg13g2_IOPadInOut4mA (
 );
 endmodule
 
-(* blackbox *) module sg13g2_IOPadVdd ();   endmodule
-(* blackbox *) module sg13g2_IOPadVss ();   endmodule
-(* blackbox *) module sg13g2_IOPadIOVdd (); endmodule
-(* blackbox *) module sg13g2_IOPadIOVss (); endmodule
-
 // -------------------------------------------------------------------------
 // Single-port SRAM macros (used by sram_wrapper_ihp_sg13g2.sv)
 // -------------------------------------------------------------------------
@@ -143,8 +138,8 @@ module RM_IHPSG13_1P_1024x32_c2_bm_bist (
 );
 endmodule
 
-// The IHP-SG13G2 PDK SRAM set has no 4096x32 single-port cut, so the 4096-word
-// cache bank is built from two of these 2048x32 macros in sram_wrapper_ihp_sg13g2.sv.
+// The 4096- and 8192-word banks are built from these 2048x32 macros in
+// sram_wrapper_ihp_sg13g2.sv (no 4096x32 cut; the 8192x32 one has no byte mask).
 (* blackbox *)
 module RM_IHPSG13_1P_2048x32_c2_bm_bist (
     input         A_CLK,
@@ -164,18 +159,5 @@ module RM_IHPSG13_1P_2048x32_c2_bm_bist (
     input  [10:0] A_BIST_ADDR,
     input  [31:0] A_BIST_DIN,
     input  [31:0] A_BIST_BM
-);
-endmodule
-
-(* blackbox *)
-module RM_IHPSG13_1P_8192x32_c4 (
-    input         A_CLK,
-    input         A_MEN,
-    input         A_WEN,
-    input         A_REN,
-    input  [12:0] A_ADDR,
-    input  [31:0] A_DIN,
-    input         A_DLY,
-    output [31:0] A_DOUT
 );
 endmodule

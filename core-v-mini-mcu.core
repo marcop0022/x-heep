@@ -122,14 +122,6 @@ filesets:
     depend:
     - technology::prim_tsmc65
 
-  # Chip-level wrapper used ONLY to give `x_heep_system` a synthesizable
-  # boundary when it is NOT the direct synthesis top (kept for reference /
-  # alternative flows). Not used by the `x_heep_system`-as-top flow below.
-  ip-asic-ihp-wrapper:
-    files:
-    - hw/asic/ihp-sg13g2/rtl/asic_x_heep_system_wrapper.sv
-    file_type: systemVerilogSource
-
   # Post-synthesis gate-level netlist of one of the ASIC flows
   # (`asic_{yosys,dc}_{ihp130,tsmc65}` below), staged at a fixed path after
   # each run by `make <tool>-<tech>-stage-netlist`, which also records its
