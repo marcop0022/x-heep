@@ -8,10 +8,15 @@
 
 `ifndef SYNTHESIS
 // Gate-level (post-synthesis) simulation: the tasks below poke DUT-internal
-// hierarchy (core_v_mini_mcu_i...) that is flattened away by synthesis and
-// would fail to elaborate. Only stubs are kept for the ones tb_top.sv calls;
-// boot from flash (+boot_sel=1) instead.
+// hierarchy (core_v_mini_mcu_i...) that does not survive synthesis and
+// would fail to elaborate. Only stubs are kept for the ones the testbenches
+// call (tb_top.sv, and through DPI tb_top.cpp, which also needs
+// load_flash_hex); boot from flash (+boot_sel=1) instead.
 `ifdef POSTSYNTHESIS
+export "DPI-C" task tb_loadHEX;
+export "DPI-C" task tb_set_exit_loop;
+export "DPI-C" task load_flash_hex;
+
 task tb_loadHEX;
   input string file;
   $fatal(1, "[TESTBENCH]: tb_loadHEX (JTAG force-load) is not supported in post-synthesis simulation, use +boot_sel=1");

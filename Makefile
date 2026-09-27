@@ -61,6 +61,9 @@ asic_netlist = $(FUSESOC_BUILD_DIR)/$(call asic_target,$1)-$(if $(filter yosys-%
 # Netlist staged for the post-synthesis simulation (sim_postsynthesis target)
 POSTSYNTH_DIR     = implementation/postsynth
 POSTSYNTH_NETLIST = $(POSTSYNTH_DIR)/x_heep_system_netlist.v
+# Verilator post-synthesis simulation: generated cell models and build dir
+POSTSYNTH_VERILATOR_CELLS = $(POSTSYNTH_DIR)/x_heep_system_cells_verilator.sv
+VERILATOR_POSTSYNTH_DIR   = $(FUSESOC_BUILD_DIR)/sim_postsynthesis_verilator-verilator
 # Technology of `make asic-tech-check` / `make asic-tech-db`
 TECH ?= ihp130
 # Cycle limit of the post-synthesis simulation (gate level is slow: bound it)
@@ -454,6 +457,23 @@ questasim-xfind-postsynth:
 ## Same as questasim-run-postsynth but using the HDL optimized compilation
 questasim-run-postsynth-opt:
 	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
+
+## Verilator post-synthesis (gate-level) simulation build of the staged netlist.
+## Requires: `make <tool>-<tech> <tool>-<tech>-stage-netlist` already run, the design kit of that
+## technology exported ($IHP130 / $TSMC65), and tclsh. First generates the cell models
+## (scripts/sim/verilator/gen_postsyn_cells.tcl: std cells from the Liberty, IO pads/SRAMs from
+## the PDK), then always rebuilds the Verilator model from scratch.
+verilator-build-postsynth: | .check-verilator
+	@test -f $(POSTSYNTH_DIR)/asic_tech || (echo "ERROR: no staged netlist - run 'make <tool>-<tech>-stage-netlist' first" && exit 1)
+	tclsh scripts/sim/verilator/gen_postsyn_cells.tcl $$(cat $(POSTSYNTH_DIR)/asic_tech) $(POSTSYNTH_NETLIST) $(POSTSYNTH_VERILATOR_CELLS)
+	$(if $(FUSESOC_BUILD_DIR),rm -rf $(VERILATOR_POSTSYNTH_DIR))
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth_verilator.log
+
+## Launches the Verilator post-synthesis simulation (built by `verilator-build-postsynth`) with the
+## compiled firmware (`app` target, LINKER=flash_load), booting from flash, bounded by POSTSYNTH_MAX_CYCLES.
+verilator-run-postsynth:
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --run openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) \
+		--run_options="+firmware=../../../sw/build/main.hex +boot_sel=1 +max_sim_time=$(POSTSYNTH_MAX_CYCLES) $(SIM_ARGS)"
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 

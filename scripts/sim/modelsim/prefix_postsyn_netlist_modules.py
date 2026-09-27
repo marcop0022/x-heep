@@ -16,7 +16,17 @@
 # This script prefixes every module defined in the netlist (definitions and
 # instantiations) with PREFIX, except the top (x_heep_system_synth_top),
 # which the simulation shim instantiates by name.
+#
+# Long or escaped names (yosys-slang derives them from the full instance
+# path, e.g. `\addr_dec_resp_mux$x_heep_system_synth_top.x_heep_system_i...`,
+# DC appends every parameter value) become short plain identifiers,
+# PREFIX + <readable base> + _<hash of the full name>: Verilator names a C++
+# class and file after each module, and such names (hundreds of characters,
+# each special one expanded to __0XX) exceed the file-name length limit.
+# Only module names change; instance names, i.e. the hierarchical paths used
+# for debugging, stay as they are.
 
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -34,10 +44,24 @@ MODULE_RE = re.compile(r"^module\s+" + IDENT)
 INST_RE = re.compile(r"^(\s+)" + IDENT + r"(\s)")
 
 
+MAX_PLAIN = 48  # longer (or escaped) module names get shortened
+BASE_LEN = 40   # readable part kept from a shortened name
+
+
 def prefixed(name: str) -> str:
-    if name.startswith("\\"):
-        return "\\" + PREFIX + name[1:]
-    return PREFIX + name
+    if not name.startswith("\\") and len(name) <= MAX_PLAIN:
+        return PREFIX + name
+    raw = name[1:] if name.startswith("\\") else name
+    parts = raw.split("\\")
+    if parts[0].startswith("$paramod") and len(parts) > 1:
+        # yosys: $paramod$<hash>\<module> or $paramod\<module>\<P=V>...
+        base = parts[1]
+    else:
+        # yosys-slang: <module>$<instance path>; DC: <module>_<param values>
+        base = raw.split("$", 1)[0] or raw
+    base = re.sub(r"\W", "_", base)[:BASE_LEN]
+    digest = hashlib.sha1(name.encode()).hexdigest()[:8]
+    return f"{PREFIX}{base}_{digest}"
 
 
 def main() -> None:
@@ -57,6 +81,8 @@ def main() -> None:
         sys.exit(f"ERROR: top module '{TOP}' not found in {NETLIST}")
 
     rename = {n: prefixed(n) for n in defined if n != TOP}
+    if len(set(rename.values())) != len(rename):
+        sys.exit(f"ERROR: module-name collision while renaming the modules of {NETLIST}")
 
     out = []
     for line in lines:
@@ -70,7 +96,9 @@ def main() -> None:
         out.append(line)
 
     NETLIST.write_text("".join(out))
-    print(f"[prefix_postsyn_netlist_modules] {len(rename)} module(s) prefixed with '{PREFIX}' in {NETLIST}")
+    shortened = sum(1 for n in rename if rename[n] != PREFIX + n)
+    print(f"[prefix_postsyn_netlist_modules] {len(rename)} module(s) prefixed with '{PREFIX}' "
+          f"({shortened} long/escaped name(s) shortened) in {NETLIST}")
 
 
 if __name__ == "__main__":

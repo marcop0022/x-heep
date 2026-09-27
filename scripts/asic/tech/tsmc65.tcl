@@ -84,10 +84,18 @@ proc tech_dc_link_dbs {} {
 
 proc tech_sim_models {} {
   set fe [_tsmc65_front_end]
-  set d [_tsmc65_sram_dir]
   return [concat \
     [asic_find "TSMC65 std-cell Verilog models" TSMC65_STDCELL_V \
       [list "$fe/verilog/tcbn65lplvt_*/tcbn65lplvt.v"]] \
+    [tech_sim_macro_models]]
+}
+
+# The models of the non-std cells only (IO pads, SRAM macros): the Verilator
+# post-synthesis simulation models the std cells from the Liberty instead.
+proc tech_sim_macro_models {} {
+  set fe [_tsmc65_front_end]
+  set d [_tsmc65_sram_dir]
+  return [concat \
     [asic_find "TSMC65 IO pad Verilog models" TSMC65_IO_V \
       [list "$fe/verilog/tpdn65lpnv2od3_*/tpdn65lpnv2od3.v"]] \
     [asic_find "TSMC65 SRAM Verilog models" TSMC65_SRAM_V \

@@ -160,6 +160,39 @@ filesets:
     - scripts/sim/modelsim/compile_postsyn_models.sh
     file_type: user
 
+  # Cell models for the Verilator post-synthesis simulation, generated for
+  # the staged netlist's technology by `make verilator-build-postsynth`
+  # (scripts/sim/verilator/gen_postsyn_cells.tcl): Verilator cannot use the
+  # PDK std-cell models (sequential UDPs, flops clocked through
+  # specify-driven `delayed_*` nets), so the std cells are modeled from the
+  # Liberty, next to the PDK's own IO-pad/SRAM models.
+  postsynthesis-cells-verilator:
+    files:
+    - implementation/postsynth/x_heep_system_cells_verilator.sv
+    file_type: systemVerilogSource
+
+  # Verilator resolves the instances of every module it reads, not only of
+  # the elaborated hierarchy as QuestaSim does: the unused RTL of
+  # `files_rtl_generic` (CPUs, memory subsystem, GPIO, ...), compiled for the
+  # testbench, needs the simulation-only cells the dependency cores include
+  # only for a target named `sim` (`target_sim?` filesets). Superset of
+  # `tb-tech-cells-sim`.
+  rtl-sim-cells-verilator:
+    depend:
+    - x-heep:sim:sram_wrapper
+    - openhwgroup:cve2:cve2_clock_gate
+    files:
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_clk.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_sram.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/tc_pwr.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/deprecated/cluster_clk_cells.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/deprecated/pulp_clk_cells.sv
+    - hw/vendor/openhwgroup/cv32e40p/bhv/cv32e40p_sim_clock_gate.sv
+    - hw/vendor/openhwgroup/cv32e40x/bhv/cv32e40x_sim_clock_gate.sv
+    - hw/vendor/xheep/cv32e40px/bhv/cv32e40px_sim_clock_gate.sv
+    - hw/vendor/pulp_platform/gpio/src/gpio_input_stage.sv
+    file_type: systemVerilogSource
+
   # Pre-build hook: generates x_heep_system_synth_top.sv, a synthesis-only
   # top that ties off x_heep_system's 6 unconnected `if_xif` interface ports
   # (see scripts/synthesis/generate_synth_top.py for why this
@@ -564,6 +597,60 @@ targets:
         # the models compiled by compile_postsyn_models.sh (kept separate
         # from `work`, see that script for why).
         - -L pdk_lib
+
+  # Verilator variant of `sim_postsynthesis`: same netlist, shim and
+  # testbench (testharness + tb_top.cpp, booting from flash with
+  # `+boot_sel=1`), with the cell models of `postsynthesis-cells-verilator`.
+  # Build with `make verilator-build-postsynth` (which generates them).
+  # Verilator is 2-state: X/Z do not propagate as in QuestaSim, so this
+  # checks the netlist's function, not its X-safety.
+  sim_postsynthesis_verilator:
+    default_tool: verilator
+    description: Verilator post-synthesis (gate-level) simulation of the staged ASIC netlist
+    filesets:
+    - files_rtl_generic
+    - rtl-sim-cells-verilator
+    - tb-utils
+    - postsynthesis-netlist
+    - postsynthesis-sim-shim
+    - postsynthesis-cells-verilator
+    - tb-verilator
+    toplevel: [testharness]
+    hooks:
+      pre_run:
+        - remove_uart_log
+      post_run:
+        - print_uart_log
+    parameters:
+    - JTAG_DPI
+    - USE_EXTERNAL_DEVICE_EXAMPLE
+    - REMOVE_OBI_FIFO
+    - COMMON_CELLS_ASSERTS_OFF
+    - ASSERTS_OFF
+    tools:
+      verilator:
+        mode: cc
+        verilator_options:
+          - '--cc'
+          - '--trace'
+          - '--trace-fst'
+          # Gate-level netlist: trace only the testbench and the netlist's
+          # top ports (full tracing would multiply build time and size).
+          - '--trace-depth 3'
+          - '--x-assign unique'
+          - '--x-initial unique'
+          # The SRAM models have an `initial #0` check: ignore delays.
+          - '--no-timing'
+          - '+define+POSTSYNTHESIS'
+          # Netlists and PDK models are not lint-clean: report, do not stop.
+          - '-Wno-fatal'
+          - '-Wno-lint'
+          - '-Wno-style'
+          - '--exe tb_top.cpp'
+          - '-CFLAGS "-Wall -fpermissive"'
+          - '-LDFLAGS "-pthread -lutil -lelf"'
+        make_options:
+          - '-j$(shell N=$$(nproc 2>/dev/null || echo 4); [ "$$N" -le 8 ] && echo "$$N" || echo 8)'
 
   sim_sc:
     <<: *default_target

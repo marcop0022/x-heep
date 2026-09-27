@@ -82,6 +82,16 @@ make questasim-run-postsynth        # boots from flash, bounded by POSTSYNTH_MAX
   functional Verilog models into the QuestaSim library `pdk_lib`, zero-delay
   (`+nospecify +notimingcheck`, plus the technology's defines), and boots the
   firmware from the SPI flash model (`+boot_sel=1`).
+- **Verilator** (experimental, verified target: yosys-ihp130): after staging,
+  `make verilator-build-postsynth` and `make verilator-run-postsynth` simulate
+  the same netlist with the Verilator testbench (`tb_top.cpp`, booting from
+  flash). Verilator cannot use the PDK std-cell models (sequential UDPs,
+  flops clocked through specify-driven nets), so
+  [../sim/verilator/gen_postsyn_cells.tcl](../sim/verilator/gen_postsyn_cells.tcl)
+  models the std cells from the Liberty (functions, flip-flops, latches,
+  clock gates) and adds the PDK's own IO-pad/SRAM models. Verilator is
+  2-state: it checks the netlist's function, not its X-safety (QuestaSim
+  does both).
 - `make questasim-trace-postsynth` writes a text trace of the CPU bus and boot
   pins for offline debugging. It reads the internal OBI ports by the names
   Yosys gives them; on DC netlists (which split struct ports by member) those

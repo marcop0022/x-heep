@@ -21,6 +21,7 @@
 #   tech_dc_target_dbs           DC target_library
 #   tech_dc_link_dbs             DC link_library (without "*")
 #   tech_sim_models              functional Verilog models (gate-level sim)
+#   tech_sim_macro_models        the same, IO pads and SRAM macros only
 
 source [file join [file dirname [info script]] common.tcl]
 
@@ -84,6 +85,14 @@ proc tech_sim_models {} {
   set ref [_ihp130_ref]
   return [concat \
     [asic_find "IHP std-cell Verilog models" IHP130_STDCELL_V [list "$ref/sg13g2_stdcell/verilog/*.v"]] \
+    [tech_sim_macro_models]]
+}
+
+# The models of the non-std cells only (IO pads, SRAM macros): the Verilator
+# post-synthesis simulation models the std cells from the Liberty instead.
+proc tech_sim_macro_models {} {
+  set ref [_ihp130_ref]
+  return [concat \
     [asic_find "IHP IO Verilog models" IHP130_IO_V [list "$ref/sg13g2_io/verilog/*.v"]] \
     [asic_find "IHP SRAM Verilog models" IHP130_SRAM_V [list "$ref/sg13g2_sram/verilog/*.v"]]]
 }
