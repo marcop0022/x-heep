@@ -1,7 +1,8 @@
 # ASIC synthesis and post-synthesis simulation
 
 X-HEEP can be synthesized with two tools for two technologies, and every
-resulting netlist can be simulated at gate level with QuestaSim:
+resulting netlist can be simulated at gate level with QuestaSim (and,
+experimentally, with Verilator: see [below](#verilator-experimental)):
 
 | Flow           | Tool                     | Technology       | Design kit |
 |----------------|--------------------------|------------------|------------|
@@ -50,6 +51,9 @@ make dc-tsmc65-stage-netlist        # prepares the netlist for simulation
 make app PROJECT=hello_world LINKER=flash_load
 make questasim-build-postsynth
 make questasim-run-postsynth        # boots from flash, bounded by POSTSYNTH_MAX_CYCLES
+# or, instead of the last two, with Verilator:
+make verilator-build-postsynth
+make verilator-run-postsynth
 ```
 
 - Outputs: `build/<core>/asic_<tool>_<tech>-<edatool>/` (`asic_x_heep_system.v`
@@ -82,17 +86,60 @@ make questasim-run-postsynth        # boots from flash, bounded by POSTSYNTH_MAX
   functional Verilog models into the QuestaSim library `pdk_lib`, zero-delay
   (`+nospecify +notimingcheck`, plus the technology's defines), and boots the
   firmware from the SPI flash model (`+boot_sel=1`).
-- **Verilator** (experimental, verified target: yosys-ihp130): after staging,
-  `make verilator-build-postsynth` and `make verilator-run-postsynth` simulate
-  the same netlist with the Verilator testbench (`tb_top.cpp`, booting from
-  flash). Verilator cannot use the PDK std-cell models (sequential UDPs,
-  flops clocked through specify-driven nets), so
-  [../sim/verilator/gen_postsyn_cells.tcl](../sim/verilator/gen_postsyn_cells.tcl)
-  models the std cells from the Liberty (functions, flip-flops, latches,
-  clock gates) and adds the PDK's own IO-pad/SRAM models. Verilator is
-  2-state: it checks the netlist's function, not its X-safety (QuestaSim
-  does both).
 - `make questasim-trace-postsynth` writes a text trace of the CPU bus and boot
   pins for offline debugging. It reads the internal OBI ports by the names
   Yosys gives them; on DC netlists (which split struct ports by member) those
   signals are reported as `SKIPPED`.
+
+## Verilator (experimental)
+
+The staged netlist of any flow can also be simulated with Verilator, using
+the regular Verilator testbench (`tb/tb_top.cpp`, booting from flash). It was
+developed on yosys-ihp130 and dc-ihp130; the TSMC65 flows are untested.
+
+```bash
+make <tool>-<tech>-stage-netlist    # as for QuestaSim
+make app PROJECT=hello_world LINKER=flash_load
+make verilator-build-postsynth      # log: buildsim_postsynth_verilator.log
+make verilator-run-postsynth        # bounded by POSTSYNTH_MAX_CYCLES; extra plusargs in SIM_ARGS
+```
+
+Requirements: Verilator 5, `tclsh`, and the design kit of the staged
+netlist's technology exported (`$IHP130` / `$TSMC65`).
+
+- **Cell models**: Verilator cannot simulate the PDK std-cell models
+  (sequential UDPs; flip-flops clocked through nets that only `specify`
+  blocks drive, and Verilator ignores those). At every build,
+  [../sim/verilator/gen_postsyn_cells.tcl](../sim/verilator/gen_postsyn_cells.tcl)
+  writes `implementation/postsynth/x_heep_system_cells_verilator.sv`:
+  - one behavioral model per std cell, built from the Liberty that synthesis
+    mapped onto (pin functions, `ff`/`latch` groups, tri-state outputs,
+    integrated clock gates);
+  - the PDK's own models of the other cells the netlist uses (SRAM macros,
+    IO pads) and the files they depend on, with the technology's defines
+    (e.g. `FUNCTIONAL`). Their simulation-only checks (`ifndef SYNTHESIS`)
+    are disabled: they rely on `#0`, which Verilator ignores, and would stop
+    the simulation at time 0.
+
+  It fails if the netlist instantiates a cell with no model.
+- **fusesoc target**: `sim_postsynthesis_verilator`. Besides the netlist, the
+  shim and the cell models, it compiles the RTL needed by the testbench, the
+  simulation-only cells that fusesoc otherwise adds only to targets named
+  `sim` (Verilator resolves every module instantiated in the parsed RTL, used
+  or not) and the Verilator waivers.
+- **Module names**: staging shortens long or escaped module names (yosys-slang
+  and DC derive them from instance paths and parameter values) to
+  `ps_<name>_<hash>`, since Verilator names a C++ file after each module.
+  Instance names, and so the hierarchical paths, are unchanged.
+- **Testbench**: in post-synthesis mode `tb_util.svh` exports to C++ (DPI) the
+  tasks `tb_top.cpp` needs; loading the firmware through JTAG or directly
+  into the memories is not supported, so the flash boot (`+boot_sel=1`) is
+  always used.
+- **Waveforms**: `waveform.fst` in
+  `build/<core>/sim_postsynthesis_verilator-verilator/`, limited to the top
+  three hierarchy levels (`--trace-depth 3` in the core file) to keep build
+  time and size down.
+- **Limits**: Verilator is 2-state and zero-delay (`--no-timing`): it checks
+  the netlist's function, not its X-safety nor its timing (QuestaSim checks
+  X-propagation). Building the model of the full netlist takes much longer,
+  and more memory, than the RTL one.
