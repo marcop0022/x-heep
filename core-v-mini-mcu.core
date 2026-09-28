@@ -615,6 +615,9 @@ targets:
     - postsynthesis-sim-shim
     - postsynthesis-cells-verilator
     - tb-verilator
+    # Lint waivers, and the core defining the waiver-v5-gen generator that
+    # tb-utils uses with Verilator (the default target adds them for `sim` only)
+    - files_verilator_waiver
     toplevel: [testharness]
     hooks:
       pre_run:
