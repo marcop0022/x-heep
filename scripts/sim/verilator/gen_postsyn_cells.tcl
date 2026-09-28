@@ -377,7 +377,8 @@ if {[catch {
   set kw {module endmodule input output inout wire reg assign always initial begin end if else
           supply0 supply1 tri wand wor parameter localparam genvar integer logic generate endgenerate}
   foreach line [split [read_file $netlist_file] "\n"] {
-    if {[regexp {^module\s+(\\\S+|[A-Za-z_][\w$]*)} $line -> m]} {
+    # (DC may indent a module header)
+    if {[regexp {^\s*module\s+(\\\S+|[A-Za-z_][\w$]*)} $line -> m]} {
       dict set defined $m 1
     } elseif {[regexp {^\s+(\\\S+|[A-Za-z_][\w$]*)\s+(\\\S+|[A-Za-z_][\w$]*)\s*\(} $line -> t]} {
       if {$t ni $kw} { dict set used $t 1 }

@@ -40,7 +40,8 @@ TOP = "x_heep_system_synth_top"
 PDK_RE = re.compile(r"^\\?(sg13g2_|RM_IHPSG13)")
 
 IDENT = r"(\\\S+|[A-Za-z_][\w$]*)"
-MODULE_RE = re.compile(r"^module\s+" + IDENT)
+# DC may indent a module header (seen on dc-ihp130: `    module cve2_cs_registers_...`)
+MODULE_RE = re.compile(r"^\s*module\s+" + IDENT)
 INST_RE = re.compile(r"^(\s+)" + IDENT + r"(\s)")
 
 
