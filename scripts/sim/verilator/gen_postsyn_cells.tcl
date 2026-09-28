@@ -18,8 +18,13 @@
 #     integrated clock-gating cells (`clock_gating_integrated_cell`);
 #   - the technology's own models of the other cells the netlist
 #     instantiates (SRAM macros, IO pads: tech_sim_macro_models), with the
-#     files they depend on, `timescale` directives removed, and the
+#     files they depend on, `timescale` directives removed, their
+#     simulation-only checks (`ifndef SYNTHESIS) disabled, and the
 #     technology's defines (TECH_SIM_VLOG_FLAGS, e.g. FUNCTIONAL) prepended.
+#     Those checks (IHP SRAMs: "A_DLY must be tied to 1'b1") wait for the
+#     netlist's constants with `#0`, which Verilator (--no-timing) ignores:
+#     they would see the net before its tie cell drives it and $stop at time
+#     0. QuestaSim still runs them.
 # It fails if the netlist instantiates a cell with no model.
 
 if {[llength $argv] != 3} {
@@ -447,6 +452,7 @@ if {[catch {
     note "models from $f"
     set t [dict get $file_text $f]
     regsub -all -line {^\s*`timescale.*$} $t "" t
+    regsub -all {`ifndef\s+SYNTHESIS\M} $t "`ifndef VERILATOR // was: SYNTHESIS" t
     puts $fh "\n// ---- from $f ----"
     puts $fh $t
   }
