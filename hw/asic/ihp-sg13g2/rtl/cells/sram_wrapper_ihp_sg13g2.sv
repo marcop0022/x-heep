@@ -1,4 +1,4 @@
-// Copyright 2022 OpenHW Group
+// Copyright 2026 Politecnico di Torino
 // Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 
@@ -18,141 +18,143 @@ module sram_wrapper #(
     input  logic [3:0] be_i,
     input  logic pwrgate_ni,
     output logic pwrgate_ack_no,
-    // One bit per bank, as connected by memory_subsystem (and as in the other
-    // technologies' wrappers). No package reference: this file may be analyzed
-    // (by Design Compiler, one file at a time) before core_v_mini_mcu_pkg.
+    // One bit per bank, as connected by memory_subsystem. No package
+    // reference: this file may be analyzed (by tools that read one file at a
+    // time) before core_v_mini_mcu_pkg.
     input  logic set_retentive_ni,
     // output ports
     output logic [31:0] rdata_o
 );
 
-// verilator lint_off MODMISSING
-    // Not supported
+    // Power gating not supported
     assign pwrgate_ack_no = pwrgate_ni;
+
+    // Assemble bit mask
+    logic [DataWidth-1:0] bm;
+    for (genvar b = 0; b < DataWidth; ++b) begin : gen_bm_bits
+        assign bm[b] = be_i[b/8];
+    end
 
     generate
         if (DataWidth != 32) begin
-          $error("Bank size not implemented.");
+            $error("Bank size not implemented.");
         end
+        if (NumWords == 256) begin // 1KiB
+            (* keep, blackbox *)
+            RM_IHPSG13_1P_256x32_c2_bm_bist sram_i (
+                .A_CLK        ( clk_i   ),
+                .A_DLY        (  1'b1   ),
+                .A_ADDR       ( addr_i  ),
+                .A_BM         ( bm      ),
+                .A_MEN        ( req_i   ),
+                .A_WEN        ( we_i    ),
+                .A_REN        ( ~we_i   ),
+                .A_DIN        ( wdata_i ),
+                .A_DOUT       ( rdata_o ),
+                // BIST disabled
+                .A_BIST_CLK   (  1'b0 ),
+                .A_BIST_ADDR  (  '0   ),
+                .A_BIST_DIN   (  '0   ),
+                .A_BIST_BM    (  '0   ),
+                .A_BIST_MEN   (  1'b0 ),
+                .A_BIST_WEN   (  1'b0 ),
+                .A_BIST_REN   (  1'b0 ),
+                .A_BIST_EN    (  1'b0 )
+            );
+        end else if (NumWords == 512) begin // 2KiB
+            (* keep, blackbox *)
+            RM_IHPSG13_1P_512x32_c2_bm_bist sram_i (
+                .A_CLK        ( clk_i   ),
+                .A_DLY        (  1'b1   ),
+                .A_ADDR       ( addr_i  ),
+                .A_BM         ( bm      ),
+                .A_MEN        ( req_i   ),
+                .A_WEN        ( we_i    ),
+                .A_REN        ( ~we_i   ),
+                .A_DIN        ( wdata_i ),
+                .A_DOUT       ( rdata_o ),
+                // BIST disabled
+                .A_BIST_CLK   (  1'b0 ),
+                .A_BIST_ADDR  (  '0   ),
+                .A_BIST_DIN   (  '0   ),
+                .A_BIST_BM    (  '0   ),
+                .A_BIST_MEN   (  1'b0 ),
+                .A_BIST_WEN   (  1'b0 ),
+                .A_BIST_REN   (  1'b0 ),
+                .A_BIST_EN    (  1'b0 )
+            );
+        end else if (NumWords == 1024) begin // 4KiB
+            (* keep, blackbox *)
+            RM_IHPSG13_1P_1024x32_c2_bm_bist sram_i (
+                .A_CLK        ( clk_i   ),
+                .A_DLY        (  1'b1   ),
+                .A_ADDR       ( addr_i  ),
+                .A_BM         ( bm      ),
+                .A_MEN        ( req_i   ),
+                .A_WEN        ( we_i    ),
+                .A_REN        ( ~we_i   ),
+                .A_DIN        ( wdata_i ),
+                .A_DOUT       ( rdata_o ),
+                // BIST disabled
+                .A_BIST_CLK   (  1'b0 ),
+                .A_BIST_ADDR  (  '0   ),
+                .A_BIST_DIN   (  '0   ),
+                .A_BIST_BM    (  '0   ),
+                .A_BIST_MEN   (  1'b0 ),
+                .A_BIST_WEN   (  1'b0 ),
+                .A_BIST_REN   (  1'b0 ),
+                .A_BIST_EN    (  1'b0 )
+            );
+        end else if (NumWords == 4096 || NumWords == 8192) begin : gen_sram_2048_split // 16KiB, 32KiB
+            // The PDK has no 4096x32 single-port cut, and its 8192x32 cut
+            // (RM_IHPSG13_1P_8192x32_c4) has no byte mask: sb/sh would
+            // overwrite the whole word. Both sizes are built from NumWords/2048
+            // 2048x32 macros, selected by the top address bits: each access
+            // enables only the addressed macro, and the read data are muxed
+            // with the select delayed by one cycle (the SRAM read latency).
+            // 4096: w25q128jw flash controller cache; 8192: 32KiB memory banks.
+            localparam int unsigned NumMacros = NumWords / 2048;
+            localparam int unsigned SelWidth  = $clog2(NumMacros);
 
-        case (NumWords)
-            256: begin
+            logic [SelWidth-1:0]        bank_sel;
+            logic [SelWidth-1:0]        bank_sel_q;
+            logic [NumMacros-1:0][31:0] rdata_macro;
+
+            assign bank_sel = addr_i[AddrWidth-1:11];
+
+            always_ff @(posedge clk_i or negedge rst_ni) begin
+                if (!rst_ni) bank_sel_q <= '0;
+                else if (req_i) bank_sel_q <= bank_sel;
+            end
+
+            assign rdata_o = rdata_macro[bank_sel_q];
+
+            for (genvar i = 0; i < NumMacros; i++) begin : gen_macro
                 (* keep, blackbox *)
-                RM_IHPSG13_1P_256x32_c2_bm_bist sram_inst (
-                    .A_CLK      (clk_i),
-                    .A_MEN      (req_i),
-                    .A_WEN      (we_i),
-                    .A_REN      (!we_i),
-                    .A_ADDR     (addr_i),
-                    .A_DIN      (wdata_i),
-                    .A_DLY      (1'b1),
-                    .A_DOUT     (rdata_o),
-                    .A_BM       ({{8{be_i[3]}}, {8{be_i[2]}}, {8{be_i[1]}}, {8{be_i[0]}}}),
-                    .A_BIST_CLK (1'b0),
-                    .A_BIST_EN  (1'b0),
-                    .A_BIST_MEN (1'b0),
-                    .A_BIST_WEN (1'b0),
-                    .A_BIST_REN (1'b0),
-                    .A_BIST_ADDR('0),
-                    .A_BIST_DIN ('0),
-                    .A_BIST_BM  ('0)
+                RM_IHPSG13_1P_2048x32_c2_bm_bist sram_i (
+                    .A_CLK        ( clk_i          ),
+                    .A_DLY        (  1'b1          ),
+                    .A_ADDR       ( addr_i[10:0]   ),
+                    .A_BM         ( bm             ),
+                    .A_MEN        ( req_i & (bank_sel == SelWidth'(i)) ),
+                    .A_WEN        ( we_i           ),
+                    .A_REN        ( ~we_i          ),
+                    .A_DIN        ( wdata_i        ),
+                    .A_DOUT       ( rdata_macro[i] ),
+                    // BIST disabled
+                    .A_BIST_CLK   (  1'b0 ),
+                    .A_BIST_ADDR  (  '0   ),
+                    .A_BIST_DIN   (  '0   ),
+                    .A_BIST_BM    (  '0   ),
+                    .A_BIST_MEN   (  1'b0 ),
+                    .A_BIST_WEN   (  1'b0 ),
+                    .A_BIST_REN   (  1'b0 ),
+                    .A_BIST_EN    (  1'b0 )
                 );
             end
-            512: begin
-                (* keep, blackbox *)
-                RM_IHPSG13_1P_512x32_c2_bm_bist sram_inst (
-                    .A_CLK      (clk_i),
-                    .A_MEN      (req_i),
-                    .A_WEN      (we_i),
-                    .A_REN      (!we_i),
-                    .A_ADDR     (addr_i),
-                    .A_DIN      (wdata_i),
-                    .A_DLY      (1'b1),
-                    .A_DOUT     (rdata_o),
-                    .A_BM       ({{8{be_i[3]}}, {8{be_i[2]}}, {8{be_i[1]}}, {8{be_i[0]}}}),
-                    .A_BIST_CLK (1'b0),
-                    .A_BIST_EN  (1'b0),
-                    .A_BIST_MEN (1'b0),
-                    .A_BIST_WEN (1'b0),
-                    .A_BIST_REN (1'b0),
-                    .A_BIST_ADDR('0),
-                    .A_BIST_DIN ('0),
-                    .A_BIST_BM  ('0)
-                );
-            end
-            1024: begin
-                (* keep, blackbox *)
-                RM_IHPSG13_1P_1024x32_c2_bm_bist sram_inst (
-                    .A_CLK      (clk_i),
-                    .A_MEN      (req_i),
-                    .A_WEN      (we_i),
-                    .A_REN      (!we_i),
-                    .A_ADDR     (addr_i),
-                    .A_DIN      (wdata_i),
-                    .A_DLY      (1'b1),
-                    .A_DOUT     (rdata_o),
-                    .A_BM       ({{8{be_i[3]}}, {8{be_i[2]}}, {8{be_i[1]}}, {8{be_i[0]}}}),
-                    .A_BIST_CLK (1'b0),
-                    .A_BIST_EN  (1'b0),
-                    .A_BIST_MEN (1'b0),
-                    .A_BIST_WEN (1'b0),
-                    .A_BIST_REN (1'b0),
-                    .A_BIST_ADDR('0),
-                    .A_BIST_DIN ('0),
-                    .A_BIST_BM  ('0)
-                );
-            end
-            // The IHP-SG13G2 PDK SRAM set has no 4096x32 single-port cut, and its only
-            // 8192x32 cut (RM_IHPSG13_1P_8192x32_c4) has no byte mask (sb/sh would clobber
-            // the whole word). Both sizes are therefore built from NumWords/2048
-            // RM_IHPSG13_1P_2048x32_c2_bm_bist macros selected by the top address bits.
-            // Each access enables only the addressed macro (A_MEN gated by the select),
-            // and the read-data mux uses the select delayed by one cycle to match the
-            // SRAM read latency. 4096: w25q128jw flash controller LLC cache
-            // (N_SETS*SECTOR_SIZE_WORDS = 4*1024); 8192: 32 KiB code/data banks.
-            4096, 8192: begin : gen_sram_2048_split
-                localparam int unsigned NumMacros = NumWords / 2048;
-                localparam int unsigned SelWidth = $clog2(NumMacros);
-
-                logic [SelWidth-1:0]        bank_sel;
-                logic [SelWidth-1:0]        bank_sel_q;
-                logic [NumMacros-1:0][31:0] rdata_macro;
-
-                assign bank_sel = addr_i[AddrWidth-1:11];
-
-                always_ff @(posedge clk_i or negedge rst_ni) begin
-                    if (!rst_ni) bank_sel_q <= '0;
-                    else if (req_i) bank_sel_q <= bank_sel;
-                end
-
-                assign rdata_o = rdata_macro[bank_sel_q];
-
-                for (genvar i = 0; i < NumMacros; i++) begin : gen_macro
-                    (* keep, blackbox *)
-                    RM_IHPSG13_1P_2048x32_c2_bm_bist sram_inst (
-                        .A_CLK      (clk_i),
-                        .A_MEN      (req_i & (bank_sel == SelWidth'(i))),
-                        .A_WEN      (we_i),
-                        .A_REN      (!we_i),
-                        .A_ADDR     (addr_i[10:0]),
-                        .A_DIN      (wdata_i),
-                        .A_DLY      (1'b1),
-                        .A_DOUT     (rdata_macro[i]),
-                        .A_BM       ({{8{be_i[3]}}, {8{be_i[2]}}, {8{be_i[1]}}, {8{be_i[0]}}}),
-                        .A_BIST_CLK (1'b0),
-                        .A_BIST_EN  (1'b0),
-                        .A_BIST_MEN (1'b0),
-                        .A_BIST_WEN (1'b0),
-                        .A_BIST_REN (1'b0),
-                        .A_BIST_ADDR('0),
-                        .A_BIST_DIN ('0),
-                        .A_BIST_BM  ('0)
-                    );
-                end
-            end
-            default: $error("Bank size not implemented.");
-        endcase
+        end else begin
+            $error("Unsupported NumWords value: %0d", NumWords);
+        end
     endgenerate
-// verilator lint_on MODMISSING
 
 endmodule
