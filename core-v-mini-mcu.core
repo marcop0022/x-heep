@@ -101,6 +101,17 @@ filesets:
     depend:
     - technology::prim_mytech
 
+  rtl-ihp130:
+    depend:
+    - technology::prim_ihp130
+  
+  # Pre-build hook: generates x_heep_system_synth_top.sv, a synthesis-only
+  # top that ties off x_heep_system's 6 unconnected `if_xif` interface ports
+  generate_synth_top:
+    files:
+    - scripts/synthesis/generate_synth_top.py
+    file_type: user
+
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
@@ -293,6 +304,18 @@ scripts:
     cmd: [sh, -c, rm -f uart0.log]
   print_uart_log:
     cmd: [sh, -c, cat uart0.log]
+  
+  # ASIC yosys synthesis utils
+  generate_yosys_filelist:
+    cmd:
+    - sh
+    - ../../../scripts/synthesis/yosys/generate_yosys_filelist.sh
+  generate_synth_top:
+    cmd:
+    - python
+    - ../../../scripts/synthesis/generate_synth_top.py
+  asic_tech_ihp130:
+    cmd: [sh, -c, "echo 'set ASIC_TECH ihp130' > asic_tech.tcl"]
 
 targets:
   default: &default_target
@@ -604,19 +627,23 @@ targets:
 
   asic_yosys_synthesis:
     <<: *default_target
-    default_tool: openroad
-    description: yosys
+    default_tool: yosys
+    description: Yosys synthesis of X-HEEP for IHP130
     parameters:
       - SYNTHESIS=true
-      - VERILATOR=true
       - REMOVE_OBI_FIFO
     filesets_append:
-      - use_sky130? (rtl-sky130)
-      - lib-sky130
-      - openroad_base_files
-      - openroad_sky130_files
-    toplevel: [core_v_mini_mcu]
+      - x_heep_system
+      - rtl-ihp130
+      - generate_synth_top
+    hooks:
+      pre_build:
+        - generate_yosys_filelist
+        - generate_synth_top
+        - asic_tech_ihp130
+    toplevel: [x_heep_system]
     tools:
-      openroad:
-        flow_path: flow/OpenROAD-flow-scripts/flow
-        make_target: synth
+      yosys:
+        arch: generic
+        output_format: verilog
+        yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_template.tcl

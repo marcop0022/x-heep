@@ -51,6 +51,8 @@ BUILD_DIR         = build
 FUSESOC_BUILD_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name 'openhwgroup.org_systems_core-v-mini-mcu_*' 2>/dev/null | sort -V | head -n 1)
 VERILATOR_DIR     = $(FUSESOC_BUILD_DIR)/sim-verilator
 QUESTASIM_DIR     = $(FUSESOC_BUILD_DIR)/sim-modelsim
+# Technology of `make asic-tech-check`
+TECH ?= ihp130
 
 # Project options are based on the app to be built (default - hello_world)
 PROJECT ?= hello_world
@@ -328,11 +330,14 @@ vivado-fpga-remote-pgm:
 asic:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=asic_synthesis $(FUSESOC_FLAGS) --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee builddesigncompiler.log
 
-openroad-sky130:
-	git checkout hw/vendor/pulp_platform/common_cells/*
-	sed -i 's/(\*[^\n]*\*)//g' hw/vendor/pulp_platform/common_cells/src/*.sv
-	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis --flag=use_sky130 openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildopenroad.log
-	git checkout hw/vendor/pulp_platform/common_cells/*
+## Yosys synthesis for IHP-SG13G2 (needs $IHP130)
+asic-yosys:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+
+## Prints what the ASIC flows find in the design kit of TECH, and what is missing (needs tclsh)
+## @param TECH=[ihp130(default)]
+asic-tech-check:
+	tclsh scripts/asic/tech/query.tcl $(TECH) check
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 
