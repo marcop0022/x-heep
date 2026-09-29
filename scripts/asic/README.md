@@ -57,8 +57,11 @@ make questasim-run-postsynth        # boots from flash, bounded by POSTSYNTH_MAX
   the log `build-<tool>-<tech>.log` in the repository root.
 - DC clock period: `ASIC_CLK_PERIOD=<ns>` (default 20 ns for ihp130, 10 ns for
   tsmc65); constraints in [../synthesis/dc/constraints.tcl](../synthesis/dc/constraints.tcl).
-- The Yosys IHP flow still runs without `$IHP130`, producing a generic netlist
-  with the PDK cells as black boxes (not simulatable).
+- Every flow needs the design kit of its technology: without it, synthesis
+  stops at once with an error.
+- The yosys flow reads the interface of the IHP cells the RTL instantiates
+  directly from black-box stubs (`hw/asic/ihp-sg13g2/rtl/cells/ihp_sg13g2_blackbox_stubs.sv`),
+  since yosys-slang elaborates before the Liberty files are read.
 
 ## How it fits together
 

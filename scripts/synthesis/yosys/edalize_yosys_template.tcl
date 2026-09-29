@@ -29,6 +29,12 @@ if {[file exists asic_tech.tcl]} { source asic_tech.tcl }
 source ../../../scripts/asic/tech/$ASIC_TECH.tcl
 puts "\[x-heep] target technology: $ASIC_TECH"
 
+# The flow maps onto the technology's cells: its design kit is required
+# (checked here, before the long RTL elaboration).
+if {[asic_env $TECH_ROOT_VAR] eq ""} {
+	error "\[x-heep] \$$TECH_ROOT_VAR is not set: the $ASIC_TECH flow needs its design kit (see scripts/asic/tech/$ASIC_TECH.tcl)."
+}
+
 # `x_heep_system` (the actual RTL top, and the module name `$top` resolves to
 # for this target) cannot be a synthesis top on its own: it exposes 6
 # unconnected SystemVerilog `interface` ports (the CV-X-IF eXtension
@@ -69,47 +75,35 @@ read_slang --top $synth_top \
 # which the plain-Verilog postsynthesis simulation cannot compile.
 yosys chformal -remove
 
-# `--ignore-unknown-modules` above lets slang emit the not-yet-mapped PDK
-# primitives (std cells, IO pads, SRAM macros instantiated by the technology
-# wrappers in hw/asic/<tech>/) as black boxes, so `synth` does not error on
-# their missing definitions.
+# PDK cells the technology wrappers in hw/asic/<tech>/ instantiate directly
+# (std cells, IO pads, SRAM macros): slang elaborates before any Liberty is
+# read, so it takes their interface from the black-box stubs of the
+# technology (ihp130: ihp_sg13g2_blackbox_stubs.sv), or, where there are none,
+# emits them as unknown black boxes (`--ignore-unknown-modules` above).
 
-# Standard-cell technology mapping is gated on the technology's kit variable
-# ($TECH_ROOT_VAR: IHP130 or TSMC65, see scripts/asic/tech/<tech>.tcl).
-#   - set   -> the Liberty views of the std cells and of the hard cells the RTL
-#              instantiates (SRAM macros, and for tsmc65 the IO pads) are loaded,
-#              and the netlist is mapped onto real library cells. Output is
-#              PDK-derived: keep it private.
-#   - unset -> ihp130 only: generic netlist, PDK cells (sg13g2_*, RM_IHPSG13_1P_*)
-#              stay as black boxes. Safe to run / push publicly (no PDK data in
-#              the output). The tsmc65 flow requires its kit.
-if {[asic_env $TECH_ROOT_VAR] ne ""} {
-	# Load the cell interfaces + timing before mapping. `-lib` = no netlists,
-	# `-overwrite` replaces the placeholder black-box stubs read from SystemVerilog.
-	set stdcell_libs [tech_stdcell_libs]
-	set stdcell_lib [lindex $stdcell_libs 0]
-	if {[llength $stdcell_libs] > 1} {
-		puts "\[x-heep] WARNING: several std-cell Liberty files, mapping onto the first: $stdcell_lib"
-	}
-	puts "\[x-heep] std-cell Liberty: $stdcell_lib"
-	yosys read_liberty -lib -overwrite $stdcell_lib
-
-	# Hard cells instantiated by the RTL (blackbox, timing only).
-	foreach macro_lib [tech_yosys_macro_libs] {
-		puts "\[x-heep] hard-cell Liberty: $macro_lib"
-		yosys read_liberty -lib -overwrite $macro_lib
-	}
-
-	yosys synth -top $synth_top
-	yosys dfflibmap -liberty $stdcell_lib
-	yosys abc -liberty $stdcell_lib
-	yosys clean
-} elseif {$ASIC_TECH eq "ihp130"} {
-	puts "\[x-heep] IHP130 not set: generic synthesis, PDK cells left as black boxes."
-	yosys synth -top $synth_top
-} else {
-	error "\[x-heep] \$$TECH_ROOT_VAR is not set: the $ASIC_TECH flow needs its design kit (see scripts/asic/tech/$ASIC_TECH.tcl)."
+# Technology mapping: the Liberty views of the std cells and of the hard
+# cells the RTL instantiates (SRAM macros, and for tsmc65 the IO pads) are
+# loaded (`-lib` = interfaces + timing, no netlists; `-overwrite` replaces
+# the black-box stubs read from SystemVerilog), and the netlist is mapped onto
+# real library cells. Output is PDK-derived: keep it private.
+set stdcell_libs [tech_stdcell_libs]
+set stdcell_lib [lindex $stdcell_libs 0]
+if {[llength $stdcell_libs] > 1} {
+	puts "\[x-heep] WARNING: several std-cell Liberty files, mapping onto the first: $stdcell_lib"
 }
+puts "\[x-heep] std-cell Liberty: $stdcell_lib"
+yosys read_liberty -lib -overwrite $stdcell_lib
+
+# Hard cells instantiated by the RTL (blackbox, timing only).
+foreach macro_lib [tech_yosys_macro_libs] {
+	puts "\[x-heep] hard-cell Liberty: $macro_lib"
+	yosys read_liberty -lib -overwrite $macro_lib
+}
+
+yosys synth -top $synth_top
+yosys dfflibmap -liberty $stdcell_lib
+yosys abc -liberty $stdcell_lib
+yosys clean
 
 # NOTE: hierarchy is deliberately kept (no `-flatten`), like the DC flow's
 # `compile_ultra -no_autoungroup`: the RTL instance paths
