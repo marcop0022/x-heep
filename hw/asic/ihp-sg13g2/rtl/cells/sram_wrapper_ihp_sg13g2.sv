@@ -127,15 +127,14 @@ module sram_wrapper #(
                 .A_BIST_REN   (  1'b0 ),
                 .A_BIST_EN    (  1'b0 )
             );
-        end else if (NumWords > 2048 && NumWords % 2048 == 0) begin : gen_sram_2048_split // 16KiB, 32KiB, ...
-            // Any multiple of 2048 words above 2048 (e.g. 4096: w25q128jw
-            // flash controller cache; 8192: 32KiB memory banks) is built from
-            // NumWords/2048 2048x32 macros: the PDK has no 4096x32 single-port
-            // cut, and its 8192x32 cut (RM_IHPSG13_1P_8192x32_c4) has no byte
-            // mask, so sb/sh would overwrite the whole word. The top address
-            // bits select the macro: each access enables only the addressed
-            // one, and the read data are muxed with the select delayed by one
-            // cycle (the SRAM read latency).
+        end else if (NumWords == 4096 || NumWords == 8192) begin : gen_sram_2048_split // 16KiB, 32KiB
+            // The PDK has no 4096x32 single-port cut, and its 8192x32 cut
+            // (RM_IHPSG13_1P_8192x32_c4) has no byte mask: sb/sh would
+            // overwrite the whole word. Both sizes are built from NumWords/2048
+            // 2048x32 macros, selected by the top address bits: each access
+            // enables only the addressed macro, and the read data are muxed
+            // with the select delayed by one cycle (the SRAM read latency).
+            // 4096: w25q128jw flash controller cache; 8192: 32KiB memory banks.
             localparam int unsigned NumMacros = NumWords / 2048;
             localparam int unsigned SelWidth  = $clog2(NumMacros);
 
