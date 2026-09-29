@@ -56,6 +56,8 @@ ASIC_YOSYS_NETLIST   = $(FUSESOC_BUILD_DIR)/asic_yosys_synthesis-yosys/asic_x_he
 POSTSYNTH_DIR        = implementation/postsynth
 POSTSYNTH_NETLIST    = $(POSTSYNTH_DIR)/x_heep_system_netlist.v
 POSTSYNTH_MAX_CYCLES ?= 5000000
+POSTSYNTH_VERILATOR_CELLS = $(POSTSYNTH_DIR)/x_heep_system_cells_verilator.sv
+VERILATOR_POSTSYNTH_DIR   = $(FUSESOC_BUILD_DIR)/sim_postsynthesis_verilator-verilator
 # Technology of `make asic-tech-check`
 TECH ?= ihp130
 
@@ -377,6 +379,18 @@ questasim-run-postsynth-app: app
 ## Same as questasim-run-postsynth but using the HDL optimized compilation
 questasim-run-postsynth-opt:
 	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
+
+## Verilator post-synthesis (gate-level) simulation build of the `make asic_yosys` netlist.
+verilator-build-postsynth: asic_yosys_stage | .check-verilator
+	tclsh scripts/sim/verilator/gen_postsyn_cells.tcl $$(cat $(POSTSYNTH_DIR)/asic_tech) $(POSTSYNTH_NETLIST) $(POSTSYNTH_VERILATOR_CELLS)
+	$(if $(FUSESOC_BUILD_DIR),rm -rf $(VERILATOR_POSTSYNTH_DIR))
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth_verilator.log
+
+## Launches the Verilator post-synthesis simulation (built by `verilator-build-postsynth`) with the
+## compiled firmware (`app` target, LINKER=flash_load), booting from flash, bounded by POSTSYNTH_MAX_CYCLES.
+verilator-run-postsynth:
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --run openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) \
+		--run_options="+firmware=../../../sw/build/main.hex +boot_sel=1 +max_sim_time=$(POSTSYNTH_MAX_CYCLES) $(SIM_ARGS)"
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 

@@ -134,6 +134,27 @@ filesets:
     - scripts/sim/modelsim/compile_postsyn_models.sh
     file_type: user
 
+  postsynthesis-cells-verilator:
+    files:
+    - implementation/postsynth/x_heep_system_cells_verilator.sv
+    file_type: systemVerilogSource
+
+  rtl-sim-cells-verilator:
+    depend:
+    - x-heep:sim:sram_wrapper
+    - openhwgroup:cve2:cve2_clock_gate
+    files:
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_clk.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_sram.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/tc_pwr.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/deprecated/cluster_clk_cells.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/deprecated/pulp_clk_cells.sv
+    - hw/vendor/openhwgroup/cv32e40p/bhv/cv32e40p_sim_clock_gate.sv
+    - hw/vendor/openhwgroup/cv32e40x/bhv/cv32e40x_sim_clock_gate.sv
+    - hw/vendor/xheep/cv32e40px/bhv/cv32e40px_sim_clock_gate.sv
+    - hw/vendor/pulp_platform/gpio/src/gpio_input_stage.sv
+    file_type: systemVerilogSource
+
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
@@ -498,6 +519,57 @@ targets:
         - -voptargs=+acc=npr
         - +bus_conflict_off
         - -L pdk_lib
+
+  sim_postsynthesis_verilator:
+    default_tool: verilator
+    description: Verilator post-synthesis (gate-level) simulation of the staged ASIC netlist
+    filesets:
+    - files_rtl_generic
+    - rtl-sim-cells-verilator
+    - tb-utils
+    - postsynthesis-netlist
+    - postsynthesis-sim-shim
+    - postsynthesis-cells-verilator
+    - tb-verilator
+    # Lint waivers, and the core defining the waiver-v5-gen generator that
+    # tb-utils uses with Verilator (the default target adds them for `sim` only)
+    - files_verilator_waiver
+    toplevel: [testharness]
+    hooks:
+      pre_run:
+        - remove_uart_log
+      post_run:
+        - print_uart_log
+    parameters:
+    - JTAG_DPI
+    - USE_EXTERNAL_DEVICE_EXAMPLE
+    - REMOVE_OBI_FIFO
+    - COMMON_CELLS_ASSERTS_OFF
+    - ASSERTS_OFF
+    tools:
+      verilator:
+        mode: cc
+        verilator_options:
+          - '--cc'
+          - '--trace'
+          - '--trace-fst'
+          # Gate-level netlist: trace only the testbench and the netlist's
+          # top ports (full tracing would multiply build time and size).
+          - '--trace-depth 3'
+          - '--x-assign unique'
+          - '--x-initial unique'
+          # The SRAM models have an `initial #0` check: ignore delays.
+          - '--no-timing'
+          - '+define+POSTSYNTHESIS'
+          # Netlists and PDK models are not lint-clean: report, do not stop.
+          - '-Wno-fatal'
+          - '-Wno-lint'
+          - '-Wno-style'
+          - '--exe tb_top.cpp'
+          - '-CFLAGS "-Wall -fpermissive"'
+          - '-LDFLAGS "-pthread -lutil -lelf"'
+        make_options:
+          - '-j$(shell N=$$(nproc 2>/dev/null || echo 4); [ "$$N" -le 8 ] && echo "$$N" || echo 8)'
 
   sim_sc:
     <<: *default_target
