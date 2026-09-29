@@ -51,6 +51,11 @@ BUILD_DIR         = build
 FUSESOC_BUILD_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name 'openhwgroup.org_systems_core-v-mini-mcu_*' 2>/dev/null | sort -V | head -n 1)
 VERILATOR_DIR     = $(FUSESOC_BUILD_DIR)/sim-verilator
 QUESTASIM_DIR     = $(FUSESOC_BUILD_DIR)/sim-modelsim
+QUESTASIM_POSTSYNTH_DIR = $(FUSESOC_BUILD_DIR)/sim_postsynthesis-modelsim
+ASIC_YOSYS_NETLIST   = $(FUSESOC_BUILD_DIR)/asic_yosys_synthesis-yosys/asic_x_heep_system.v
+POSTSYNTH_DIR        = implementation/postsynth
+POSTSYNTH_NETLIST    = $(POSTSYNTH_DIR)/x_heep_system_netlist.v
+POSTSYNTH_MAX_CYCLES ?= 5000000
 # Technology of `make asic-tech-check`
 TECH ?= ihp130
 
@@ -338,6 +343,40 @@ asic-yosys:
 ## @param TECH=[ihp130(default)]
 asic-tech-check:
 	tclsh scripts/asic/tech/query.tcl $(TECH) check
+
+## Stages the `make asic_yosys` netlist for the post-synthesis simulations, in implementation/postsynth/
+asic_yosys_stage:
+	@test -f "$(ASIC_YOSYS_NETLIST)" || (echo "ERROR: $(ASIC_YOSYS_NETLIST) not found - run 'make asic_yosys' first" && exit 1)
+	mkdir -p $(POSTSYNTH_DIR)
+	cp $(ASIC_YOSYS_NETLIST) $(POSTSYNTH_NETLIST)
+	echo ihp130 > $(POSTSYNTH_DIR)/asic_tech
+	@! grep -nE '^\s*assert\s*\(' $(POSTSYNTH_NETLIST) | head -5 | grep . || (echo "ERROR: netlist still contains assert statements - re-run 'make asic_yosys'" && exit 1)
+	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $(POSTSYNTH_NETLIST)
+	$(PYTHON) scripts/sim/modelsim/generate_postsyn_sim_shim.py
+	@echo "Staged the asic_yosys netlist in $(POSTSYNTH_DIR)"
+
+## @section Post-synthesis Simulation
+## Questasim post-synthesis (gate-level) simulation build of the staged netlist.
+questasim-build-postsynth:
+	$(if $(FUSESOC_BUILD_DIR),rm -rf $(QUESTASIM_POSTSYNTH_DIR))
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth.log
+
+## Questasim post-synthesis simulation with HDL optimized compilation
+questasim-build-postsynth-opt: questasim-build-postsynth
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) opt
+
+## Launches the post-synthesis gate-level simulation with the compiled firmware
+## (`app` target), booting from flash (JTAG force-load does not survive synthesis).
+questasim-run-postsynth:
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
+
+## First builds the app and then uses Questasim to gate-level simulate the netlist and run the FW
+questasim-run-postsynth-app: app
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
+
+## Same as questasim-run-postsynth but using the HDL optimized compilation
+questasim-run-postsynth-opt:
+	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 

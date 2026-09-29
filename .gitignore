@@ -1,6 +1,7 @@
 
 *.log
 build/
+implementation/postsynth/
 *.so
 *.hex
 *.elf

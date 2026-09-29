@@ -112,6 +112,28 @@ filesets:
     - scripts/synthesis/generate_synth_top.py
     file_type: user
 
+  postsynthesis-netlist:
+    files:
+    - implementation/postsynth/x_heep_system_netlist.v
+    file_type: verilogSource
+
+  postsynthesis-sim-shim:
+    files:
+    - implementation/postsynth/x_heep_system_postsyn_sim_shim.sv
+    file_type: systemVerilogSource
+
+  # tech_cells_generic's own `rtl_sim` fileset (tc_sram, tc_clk_gating, ...)
+  tb-tech-cells-sim:
+    files:
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_clk.sv
+    - hw/vendor/pulp_platform/tech_cells_generic/src/rtl/tc_sram.sv
+    file_type: systemVerilogSource
+
+  pre_build_postsyn_models:
+    files:
+    - scripts/sim/modelsim/compile_postsyn_models.sh
+    file_type: user
+
   rtl-sky130:
     files:
     - hw/asic/sky130/sram_wrapper.sv
@@ -304,7 +326,11 @@ scripts:
     cmd: [sh, -c, rm -f uart0.log]
   print_uart_log:
     cmd: [sh, -c, cat uart0.log]
-  
+  pre_build_postsyn_models:
+    cmd:
+    - sh
+    - ../../../scripts/sim/modelsim/compile_postsyn_models.sh
+
   # ASIC yosys synthesis utils
   generate_yosys_filelist:
     cmd:
@@ -422,6 +448,56 @@ targets:
         make_options:
           # Use the number of available cores (up to a max of 8) for parallel compilation, with a fallback to 4 if nproc is not available
           - '-j$(shell N=$$(nproc 2>/dev/null || echo 4); [ "$$N" -le 8 ] && echo "$$N" || echo 8)'
+
+  sim_postsynthesis:
+    default_tool: modelsim
+    description: QuestaSim post-synthesis (gate-level) simulation of the staged ASIC netlist
+    filesets:
+    - files_rtl_generic
+    - tb-tech-cells-sim
+    - tb-utils
+    - postsynthesis-netlist
+    - postsynthesis-sim-shim
+    - pre_build_remote_bitbang
+    - pre_build_uartdpi
+    - pre_patch_modelsim_Makefile
+    - pre_build_postsyn_models
+    - tb-sv
+    toplevel: [tb_top]
+    hooks:
+      pre_build:
+        - tool_modelsim? (pre_build_uartdpi)
+        - tool_modelsim? (pre_build_remote_bitbang)
+        - tool_modelsim? (pre_patch_modelsim_Makefile) # this is required by Questa 2020 on
+        - tool_modelsim? (pre_build_postsyn_models)
+      pre_run:
+        - remove_uart_log
+      post_run:
+        - print_uart_log
+    parameters:
+    - JTAG_DPI
+    - USE_EXTERNAL_DEVICE_EXAMPLE
+    - REMOVE_OBI_FIFO
+    - COMMON_CELLS_ASSERTS_OFF
+    - ASSERTS_OFF
+    tools:
+      modelsim:
+        vlog_options:
+        - -override_timescale 1ns/1ps
+        - -suppress vlog-2583
+        - -suppress vlog-2577
+        - -suppress vlog-2720
+        - -pedanticerrors
+        - -define MODELSIM
+        - -define POSTSYNTHESIS
+        - +notimingcheck
+        - +nospecify
+        vsim_options:
+        - -sv_lib ../../../hw/vendor/lowrisc/opentitan/hw/dv/dpi/uartdpi/uartdpi
+        - -sv_lib ../../../hw/vendor/pulp_platform/pulpissimo/rtl/tb/remote_bitbang/librbs
+        - -voptargs=+acc=npr
+        - +bus_conflict_off
+        - -L pdk_lib
 
   sim_sc:
     <<: *default_target
