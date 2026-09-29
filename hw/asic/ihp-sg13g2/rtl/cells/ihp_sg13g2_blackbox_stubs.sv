@@ -2,10 +2,16 @@
 // Solderpad Hardware License, Version 2.1, see LICENSE.md for details.
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 //
-// Black-box stubs for the IHP-SG13G2 hard cells referenced by the X-HEEP
-// technology wrappers. They let `hierarchy -check` / `synth` complete in the
-// generic Yosys flow without the real PDK views. Replace with the PDK Verilog
-// models (and add `dfflibmap`/`abc -liberty`) once technology mapping is wired.
+// Black-box stubs (interfaces only) of the IHP-SG13G2 cells the X-HEEP
+// technology wrappers instantiate directly, for the yosys flow
+// (scripts/synthesis/yosys/edalize_yosys_template.tcl):
+//   - yosys-slang elaborates the RTL before any Liberty file is read, and
+//     takes the ports of these cells from here;
+//   - read_liberty -lib -overwrite then replaces the std cells and the SRAM
+//     macros with their Liberty views; the IO pads, whose Liberty the yosys
+//     flow does not read (tech_yosys_macro_libs), keep these stubs.
+// The cells stay instances in the netlist. Never used in simulation (the
+// PDK's own models are), nor read by Design Compiler.
 
 // -------------------------------------------------------------------------
 // Standard cells (used by prim_ihp_sg13g2_clk.sv)

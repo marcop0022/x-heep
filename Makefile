@@ -351,7 +351,7 @@ asic:
 ## `make <tool>-<tech>-stage-netlist` then prepares it for questasim-build-postsynth.
 ## See scripts/asic/README.md.
 
-## Yosys synthesis for IHP-SG13G2 (generic, black-box netlist if $IHP130 is unset)
+## Yosys synthesis for IHP-SG13G2 (needs $IHP130)
 yosys-ihp130:
 	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=$(call asic_target,$@) openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
 
