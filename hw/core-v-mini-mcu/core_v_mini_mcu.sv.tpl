@@ -7,16 +7,13 @@
 %>
 
 <%
-  dma = xheep.get_base_peripheral_domain().get_dma()
+  dma = xheep.get_base_peripheral_domain().get_peripheral("dma")
   memory_ss = xheep.memory_ss()
   user_peripheral_domain = xheep.get_user_peripheral_domain()
-  dma = xheep.get_base_peripheral_domain().get_dma()
-  memory_ss = xheep.memory_ss()
   dma_obi_msb = dma.get_num_master_ports() - 1
 
   clk_module = next((p for p in xheep.get_padring().get_connected_pins() if p.name in ["clk", "ref_clk"] ), None).module
   rst_module = next((p for p in xheep.get_padring().get_connected_pins() if p.name == "rst"), None).module
-
 %>
 
 module core_v_mini_mcu #(
@@ -126,6 +123,11 @@ module core_v_mini_mcu #(
     output logic [EXT_DOMAINS_RND-1:0] external_subsystem_clkgate_en_no,
 
     output logic [31:0] exit_value_o,
+    % if user_peripheral_domain.contains_peripheral('serial_link_reg'):
+      // Serial Link
+      output obi_req_t serial_link_direct_write_req_o,   
+      input  obi_rsp_t serial_link_direct_write_resp_i, 
+    % endif
 
     // External SPC interface
     input logic [core_v_mini_mcu_pkg::DMA_CH_NUM-1:0] ext_dma_slot_tx_i,
@@ -164,6 +166,12 @@ module core_v_mini_mcu #(
   obi_rsp_t  [${dma_obi_msb}:0]dma_write_resp;
   obi_req_t [${dma_obi_msb}:0]dma_addr_req;
   obi_rsp_t  [${dma_obi_msb}:0]dma_addr_resp;
+
+  % if user_peripheral_domain.contains_peripheral('serial_link_reg'):
+    obi_rsp_t serial_link_direct_write_resp;
+    obi_req_t serial_link_slave_req;
+    obi_rsp_t serial_link_slave_resp;
+  % endif
 
   // ram signals
   obi_req_t [core_v_mini_mcu_pkg::NUM_BANKS-1:0] ram_slave_req;
@@ -286,6 +294,7 @@ module core_v_mini_mcu #(
 
   // I2s
   logic i2s_rx_valid;
+  logic i2s_tx_ready;
 
   assign intr = {
     irq_fast, 4'b0, irq_external, 3'b0, rv_timer_intr[0], 3'b0, irq_software, 3'b0
@@ -330,10 +339,21 @@ module core_v_mini_mcu #(
       .core_sleep_o(core_sleep)
   );
 
+  % if xheep.debug_ss().has_spi_slave() == 0:
+    logic spi_slave_sck_i;
+    assign spi_slave_sck_i = 0;
+    logic spi_slave_cs_i;
+    assign spi_slave_cs_i = 0;
+    logic spi_slave_miso_o;
+    logic spi_slave_miso_oe_o;
+    logic spi_slave_mosi_i;
+    assign spi_slave_mosi_i = 0;
+  % endif
+
   debug_subsystem #(
       .NRHARTS    (NRHARTS),
       .JTAG_IDCODE(JTAG_IDCODE),
-      .SPI_SLAVE(${has_spi_slave}),
+      .SPI_SLAVE(${xheep.debug_ss().has_spi_slave()}),
       .obi_req_t(obi_req_t),
       .obi_rsp_t(obi_rsp_t)
   ) debug_subsystem_i (
@@ -377,6 +397,12 @@ module core_v_mini_mcu #(
       .dma_write_resp_o(dma_write_resp),
       .dma_addr_req_i(dma_addr_req),
       .dma_addr_resp_o(dma_addr_resp),
+      % if user_peripheral_domain.contains_peripheral('serial_link_reg'):
+        .serial_link_direct_write_req_i(serial_link_direct_write_req_o),
+        .serial_link_direct_write_resp_o(serial_link_direct_write_resp),
+        .serial_link_slave_req_o(serial_link_slave_req),
+        .serial_link_slave_resp_i(serial_link_slave_resp),
+      % endif
       .ext_xbar_master_req_i(ext_xbar_master_req_i),
       .ext_xbar_master_resp_o(ext_xbar_master_resp_o),
       .ram_req_o(ram_slave_req),
@@ -433,7 +459,6 @@ module core_v_mini_mcu #(
       .ao2spc_resp_o(ext_ao_peripheral_slave_resp_o),
       .xheep_instance_id_i,
       .boot_select_i,
-      .execute_from_flash_i,
       .exit_valid_o,
       .exit_value_o,
       .spimemio_req_i(flash_mem_slave_req),
@@ -481,6 +506,7 @@ module core_v_mini_mcu #(
       .spi_rx_valid_i(spi_rx_valid),
       .spi_tx_ready_i(spi_tx_ready),
       .i2s_rx_valid_i(i2s_rx_valid),
+      .i2s_tx_ready_i(i2s_tx_ready),
       .ext_peripheral_slave_req_o,
       .ext_peripheral_slave_resp_i,
       .ext_dma_slot_tx_i,
@@ -514,7 +540,7 @@ module core_v_mini_mcu #(
       .cio_sda_i(i2c_sda_i),
       .cio_sda_o(i2c_sda_o),
       .cio_sda_en_o(i2c_sda_oe_o),
-      .spi_sck_o,
+      .spi_sck_o(spi_sck_o),
       .spi_sck_en_o(spi_sck_oe_o),
       .spi_csb_o({spi_cs_1_o,spi_cs_0_o}),
       .spi_csb_en_o({spi_cs_1_oe_o, spi_cs_0_oe_o}),
@@ -524,7 +550,7 @@ module core_v_mini_mcu #(
       .spi_intr_event_o(spi_intr),
       .spi_rx_valid_o(spi_rx_valid),
       .spi_tx_ready_o(spi_tx_ready),
-      .spi2_sck_o,
+      .spi2_sck_o(spi2_sck_o),
       .spi2_sck_en_o(spi2_sck_oe_o),
       .spi2_csb_o({spi2_cs_1_o, spi2_cs_0_o}),
       .spi2_csb_en_o({spi2_cs_1_oe_o, spi2_cs_0_oe_o}),
@@ -542,11 +568,11 @@ module core_v_mini_mcu #(
       .i2s_ws_o(i2s_ws_o),
       .i2s_ws_oe_o(i2s_ws_oe_o),
       .i2s_ws_i(i2s_ws_i),
-      .i2s_sd_o(i2s_sd_o),
-      .i2s_sd_oe_o(i2s_sd_oe_o),
-      .i2s_sd_i(i2s_sd_i),
+      .i2s_sd_tx_o(i2s_sd_tx_o),
+      .i2s_sd_rx_i(i2s_sd_rx_i),
       .i2s_rx_valid_o(i2s_rx_valid),
-      .ddr_rcv_clk_i,  
+      .i2s_tx_ready_o(i2s_tx_ready),
+      .ddr_rcv_clk_i,
       .ddr_snd_clk_o,
       .ddr_rcv_0_i,
       .ddr_rcv_1_i,
@@ -556,6 +582,12 @@ module core_v_mini_mcu #(
       .ddr_snd_1_o,
       .ddr_snd_2_o,
       .ddr_snd_3_o,
+      % if user_peripheral_domain.contains_peripheral('serial_link_reg'):
+        .serial_link_direct_write_req_o,
+        .serial_link_direct_write_resp_i(serial_link_direct_write_resp),
+        .serial_link_slave_req_i(serial_link_slave_req),
+        .serial_link_slave_resp_o(serial_link_slave_resp),
+      % endif
       .uart_rx_i,
       .uart_tx_o
   );

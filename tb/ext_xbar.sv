@@ -85,12 +85,13 @@ module ext_xbar #(
         always_comb begin
           port_sel[j] = pre_port_sel[j];
           post_master_req_addr[j] = master_req_i[j].addr;
+`ifndef SIM_SYSTEMC
           if (pre_port_sel[j] == SLOW_MEMORY0_IDX[LOG_XBAR_NSLAVE-1:0]) begin
             port_sel[j] = SLOW_MEMORY0_IDX[LOG_XBAR_NSLAVE-1:0] +
                 $unsigned(master_req_i[j].addr[2:2]);
             post_master_req_addr[j] = {master_req_i[j].addr[31:3], 3'h0};
           end
-
+`endif
         end
       end
 

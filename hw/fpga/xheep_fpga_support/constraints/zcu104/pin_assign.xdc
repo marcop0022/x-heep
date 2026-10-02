@@ -18,7 +18,6 @@ set_property -dict {PACKAGE_PIN A5 IOSTANDARD LVCMOS33} [get_ports exit_valid_o]
 set_property -dict {PACKAGE_PIN B5 IOSTANDARD LVCMOS33} [get_ports exit_value_o]
 
 # SWITCHES
-set_property -dict {PACKAGE_PIN E4 IOSTANDARD LVCMOS33} [get_ports execute_from_flash_i]
 set_property -dict {PACKAGE_PIN D4 IOSTANDARD LVCMOS33} [get_ports boot_select_i]
 
 # FLASH
@@ -78,7 +77,7 @@ set_property -dict {PACKAGE_PIN E10 IOSTANDARD LVCMOS18} [get_ports {spi_slave_m
 set_property -dict {PACKAGE_PIN B11 IOSTANDARD LVCMOS18} [get_ports {spi_slave_mosi_io}]
 set_property -dict {PACKAGE_PIN A11 IOSTANDARD LVCMOS18} [get_ports {gpio_io[11]}]
 set_property -dict {PACKAGE_PIN B9 IOSTANDARD LVCMOS18} [get_ports {gpio_io[12]}]
-set_property -dict {PACKAGE_PIN B8 IOSTANDARD LVCMOS18} [get_ports {gpio_io[13]}]
+set_property -dict {PACKAGE_PIN B8 IOSTANDARD LVCMOS18} [get_ports {i2s_sd_tx_io}] ; # i2s_sd_tx pad, muxed with gpio_22
 
 # PDM2PCM
 set_property -dict {PACKAGE_PIN K19 IOSTANDARD LVCMOS18} [get_ports pdm2pcm_clk_io]
@@ -87,7 +86,7 @@ set_property -dict {PACKAGE_PIN K18 IOSTANDARD LVCMOS18} [get_ports pdm2pcm_pdm_
 # I2S
 set_property -dict {PACKAGE_PIN E18 IOSTANDARD LVCMOS18} [get_ports i2s_sck_io]
 set_property -dict {PACKAGE_PIN E17 IOSTANDARD LVCMOS18} [get_ports i2s_ws_io]
-set_property -dict {PACKAGE_PIN G18 IOSTANDARD LVCMOS18} [get_ports i2s_sd_io]
+set_property -dict {PACKAGE_PIN G18 IOSTANDARD LVCMOS18} [get_ports i2s_sd_rx_io]
 
 # SPI2
 set_property -dict {PACKAGE_PIN F18 IOSTANDARD LVCMOS18} [get_ports {spi2_csb_o[0]}]

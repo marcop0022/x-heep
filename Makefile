@@ -36,6 +36,7 @@ PYTHON  	:= $(shell which python)
 RV_PROFILE  := $(shell which rv_profile)
 AREA_PLOT   := $(shell which area-plot)
 endif
+CONDA_ENV_NAME ?= $(shell sed -n 's/^name: //p' util/conda_environment.yml)
 
 # FuseSoC cores root. Defaults to the root of the parent project vendoring X-HEEP.
 FUSESOC_CORES_ROOT	?= $(HEEP_EXTERNAL_ROOT)
@@ -56,7 +57,7 @@ PROJECT ?= hello_world
 
 # Folder where the linker scripts are located
 LINK_FOLDER ?= $(mkfile_path)/sw/linker
-# Linker options are 'on_chip' (default),'flash_load','flash_exec','freertos'
+# Linker options are 'on_chip' (default),'flash_load','freertos'
 LINKER ?= on_chip
 
 # Target options are 'sim' (default) and 'pynq-z2' and 'nexys-a7-100t'
@@ -65,7 +66,6 @@ TARGET ?= sim
 # Mcu-gen configuration files
 X_HEEP_CFG  ?= configs/general.hjson
 PADS_CFG ?= configs/pad_cfg.py
-PYTHON_X_HEEP_CFG ?=
 
 # MCU-Gen template files to generate
 MCU_GEN_TEMPLATES = $(shell find . \
@@ -134,15 +134,22 @@ BITSTREAM_SOURCE   	:= $(FUSESOC_BUILD_DIR)/$(FPGA_BOARD)-vivado/$(FUSESOC_BUILD
 HWH_SOURCE 			:= $(FUSESOC_BUILD_DIR)/$(FPGA_BOARD)-vivado/$(FUSESOC_BUILD_NAME).gen/sources_1/bd/xilinx_ps_wizard/hw_handoff/xilinx_ps_wizard.hwh 
 
 # Vendored IPs
-VENDOR_FILES	:= $(shell find hw/vendor sw/vendor util -maxdepth 2 -type f -name "*.vendor.hjson" -print)
+VENDOR_FILES	:= $(shell find hw/vendor hw/fpga sw/vendor util -maxdepth 2 -type f -name "*.vendor.hjson" -print)
 VENDOR_LOCKS	:= $(subst .vendor.hjson,.lock.hjson,$(VENDOR_FILES))
 
 # Export variables to sub-makefiles
 export
 
 ## @section Conda
-conda:
-	conda env create -f util/conda_environment.yml
+conda: util/conda_environment.yml
+	@export CMAKE_POLICY_VERSION_MINIMUM=3.5; \
+	if conda info --envs | grep -q $(CONDA_ENV_NAME); then \
+		echo "Environment $(CONDA_ENV_NAME) exists, updating..."; \
+		conda env update -f util/conda_environment.yml --prune; \
+	else \
+		echo "Creating new $(CONDA_ENV_NAME) environment..."; \
+		conda env create -f util/conda_environment.yml; \
+	fi
 
 ## @section Installation
 
@@ -152,9 +159,8 @@ conda:
 ## @param MEMORY_BANKS=[2(default)to(16-MEMORY_BANKS_IL)]
 ## @param MEMORY_BANKS_IL=[0(default),2,4,8]
 ## @param X_HEEP_CFG=[configs/general.hjson(default),<path-to-config-file>]
-## @param PYTHON_X_HEEP_CFG=[configs/general.py(default),<path-to-config-file>]
 mcu-gen:
-	$(PYTHON) util/xheep_gen/mcu_gen.py --config $(X_HEEP_CFG) --python_config $(PYTHON_X_HEEP_CFG) --pads_cfg $(PADS_CFG) --outtpl "$(MCU_GEN_TEMPLATES)" --externaltpl "$(EXTERNAL_MCU_GEN_TEMPLATES)" --cpu $(CPU) --bus $(BUS) --memorybanks $(MEMORY_BANKS) --memorybanks_il $(MEMORY_BANKS_IL)
+	$(PYTHON) util/xheep_gen/mcu_gen.py --config $(X_HEEP_CFG) --pads_cfg $(PADS_CFG) --outtpl "$(MCU_GEN_TEMPLATES)" --externaltpl "$(EXTERNAL_MCU_GEN_TEMPLATES)" --cpu $(CPU) --bus $(BUS) --memorybanks $(MEMORY_BANKS) --memorybanks_il $(MEMORY_BANKS_IL)
 
 	@echo "### MCU-GEN completed! Running FuseSoC register generators..."	
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --target=sim --tool=verilator $(FUSESOC_FLAGS) --setup openhwgroup.org:systems:core-v-mini-mcu
@@ -185,7 +191,7 @@ format-python:
 ## Generates the build folder in sw using CMake to build (compile and linking)
 ## @param PROJECT=<folder_name_of_the_project_to_be_built>
 ## @param TARGET=sim(default),systemc,pynq-z2,nexys-a7-100t,genesys2,aup-zu3,zcu102,zcu104
-## @param LINKER=on_chip(default),flash_load,flash_exec
+## @param LINKER=on_chip(default),flash_load
 ## @param COMPILER=gcc(default),clang
 ## @param COMPILER_PREFIX=riscv32-corev-(default),riscv32-unknown-
 ## @param ARCH=rv32imc(default),<any_RISC-V_ISA_string_supported_by_the_CPU>
@@ -296,7 +302,7 @@ questasim-run-opt-app: app
 ## @section Vivado
 
 ## Builds (synthesis and implementation) the bitstream for the FPGA version using Vivado
-## @param FPGA_BOARD=pynq-z2,nexys-a7-100t,genesys2,aup-zu3,zcu102,zcu104
+## @param FPGA_BOARD=pynq-z2,nexys-a7-100t,genesys2,aup-zu3,zcu102,zcu104,vpk180
 ## @param FUSESOC_FLAGS=--flag=<flagname>
 vivado-fpga:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=$(FPGA_BOARD) $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildvivado.log
@@ -305,7 +311,7 @@ vivado-fpga-nobuild:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=$(FPGA_BOARD) $(FUSESOC_FLAGS) --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildvivado.log
 
 ## Loads the generated bitstream into the FPGA
-## @param FPGA_BOARD=pynq-z2,nexys-a7-100t,genesys2,aup-zu3,zcu102,zcu104
+## @param FPGA_BOARD=pynq-z2,nexys-a7-100t,genesys2,aup-zu3,zcu102,zcu104,vpk180
 vivado-fpga-pgm:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=$(FPGA_BOARD) $(FUSESOC_FLAGS) --run openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee programfpga.log
 
@@ -377,8 +383,6 @@ test:
 	$(RM) test/*.log
 	$(PYTHON) test/test_apps/test_apps.py $(TEST_FLAGS) 2>&1 | tee test/test_apps/test_apps.log
 	@echo "You can also find the output in test/test_apps/test_apps.log"
-	$(PYTHON) test/test_x_heep_gen/test_peripherals.py
-	@echo "You can also find the peripheral test outputs in test/test_x_heep_gen/outputs"
 
 ## Compares two mcu-gen runs and lists the differences in the generated files. 
 ## It can be used to manually check if a change in the configuration or in the mcu-gen code has an
@@ -443,7 +447,7 @@ clean: clean-app
 
 ## Leave the repository in a clean state, removing all generated files. For now, it just calls clean.
 .PHONY: clean-all
-clean-all: clean
+clean-all: clean vendor-clean
 
 ## @section Utilities
 # Check if a program is available in PATH

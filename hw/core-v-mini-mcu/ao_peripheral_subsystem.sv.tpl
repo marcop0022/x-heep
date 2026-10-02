@@ -4,6 +4,11 @@
 
 <%
   base_peripheral_domain = xheep.get_base_peripheral_domain()
+  if base_peripheral_domain.contains_peripheral('w25q128jw_controller'):
+    w25 = xheep.get_base_peripheral_domain().get_peripheral("w25q128jw_controller")
+    cache = w25.get_cache()
+  else:
+    cache = 0
 %>
 
 
@@ -35,7 +40,6 @@ module ao_peripheral_subsystem
     // SOC CTRL
     input  logic [31:0] xheep_instance_id_i,
     input  logic        boot_select_i,
-    input  logic        execute_from_flash_i,
     output logic        exit_valid_o,
     output logic [31:0] exit_value_o,
 
@@ -43,7 +47,7 @@ module ao_peripheral_subsystem
     input  obi_req_t  spimemio_req_i,
     output obi_rsp_t  spimemio_resp_o,
 
-    // SPI Interface to flash (YosysHW SPI and OpenTitan SPI multiplexed)
+    // SPI Interface to flash OpenTitan
     output logic                               spi_flash_sck_o,
     output logic                               spi_flash_sck_en_o,
     output logic [spi_host_reg_pkg::NumCS-1:0] spi_flash_csb_o,
@@ -109,6 +113,7 @@ module ao_peripheral_subsystem
 
     // I2s
     input logic i2s_rx_valid_i,
+    input logic i2s_tx_ready_i,
 
     // EXTERNAL PERIPH
     output reg_req_t ext_peripheral_slave_req_o,
@@ -126,7 +131,7 @@ module ao_peripheral_subsystem
   import core_v_mini_mcu_pkg::*;
   import tlul_pkg::*;
 
-  localparam DMA_GLOBAL_TRIGGER_SLOT_NUM = 5;
+  localparam DMA_GLOBAL_TRIGGER_SLOT_NUM = 6;
   localparam DMA_EXT_TRIGGER_SLOT_NUM = core_v_mini_mcu_pkg::DMA_CH_NUM * 2;
 
   /*_________________________________________________________________________________________________________________________________ */
@@ -146,7 +151,6 @@ module ao_peripheral_subsystem
   tlul_pkg::tl_d2h_t rv_timer_tl_d2h;
 
   /* SPI memory signals */
-  logic use_spimemio;
   logic spi_flash_rx_valid;
   logic spi_flash_tx_ready;
 
@@ -166,6 +170,12 @@ module ao_peripheral_subsystem
   reg_rsp_t regdemux2perconv_resp;
   dma_reg_pkg::dma_hw2reg_t [core_v_mini_mcu_pkg::DMA_CH_NUM-1:0] external_dma_hw2reg;
   logic [core_v_mini_mcu_pkg::DMA_CH_NUM-1:0] dma_ready;
+
+% if cache:
+  /* Cache power */
+  power_manager_in_t w25_cache_pwr_ctrl_i;
+  power_manager_out_t w25_cache_pwr_ctrl_o;
+% endif
 
   /*_________________________________________________________________________________________________________________________________ */
 
@@ -188,6 +198,7 @@ module ao_peripheral_subsystem
   assign dma_global_trigger_slots[2] = spi_flash_rx_valid;
   assign dma_global_trigger_slots[3] = spi_flash_tx_ready;
   assign dma_global_trigger_slots[4] = i2s_rx_valid_i;
+  assign dma_global_trigger_slots[5] = i2s_tx_ready_i;
 
   generate
     for (genvar i = 0; i < core_v_mini_mcu_pkg::DMA_CH_NUM; i++) begin : dma_trigger_slots_gen
@@ -323,9 +334,7 @@ module ao_peripheral_subsystem
       .reg_req_i(ao_peripheral_slv_req[core_v_mini_mcu_pkg::SOC_CTRL_IDX]),
       .reg_rsp_o(ao_peripheral_slv_rsp[core_v_mini_mcu_pkg::SOC_CTRL_IDX]),
       .boot_select_i,
-      .execute_from_flash_i,
       .xheep_instance_id_i,
-      .use_spimemio_o(use_spimemio),
       .exit_valid_o,
       .exit_value_o
   );
@@ -342,6 +351,11 @@ module ao_peripheral_subsystem
 % if base_peripheral_domain.contains_peripheral('spi_flash'):
   /* SPI subsystem */
   spi_subsystem #(
+    .SPI_FLASH_START_ADDRESS(core_v_mini_mcu_pkg::SPI_FLASH_START_ADDRESS),
+% if base_peripheral_domain.contains_peripheral('w25q128jw_controller'):
+    .W25Q128JW_CONTROLLER_START_ADDRESS(core_v_mini_mcu_pkg::W25Q128JW_CONTROLLER_START_ADDRESS),
+% endif
+    .CACHE_EN(${cache}),
     .DMA_CH_NUM(core_v_mini_mcu_pkg::DMA_CH_NUM),
     .obi_req_t(obi_req_t),
     .obi_rsp_t(obi_rsp_t),
@@ -350,16 +364,17 @@ module ao_peripheral_subsystem
   ) spi_subsystem_i (
       .clk_i,
       .rst_ni,
-      .use_spimemio_i(use_spimemio),
       .spimemio_req_i,
       .spimemio_resp_o,
-      .yo_reg_req_i(ao_peripheral_slv_req[core_v_mini_mcu_pkg::SPI_MEMIO_IDX]),
-      .yo_reg_rsp_o(ao_peripheral_slv_rsp[core_v_mini_mcu_pkg::SPI_MEMIO_IDX]),
       .ot_reg_req_i(ao_peripheral_slv_req[core_v_mini_mcu_pkg::SPI_FLASH_IDX]),
       .ot_reg_rsp_o(ao_peripheral_slv_rsp[core_v_mini_mcu_pkg::SPI_FLASH_IDX]),
 % if base_peripheral_domain.contains_peripheral('w25q128jw_controller'):
       .flash_ctr_reg_req_i(ao_peripheral_slv_req[core_v_mini_mcu_pkg::W25Q128JW_CONTROLLER_IDX]),
       .flash_ctr_reg_rsp_o(ao_peripheral_slv_rsp[core_v_mini_mcu_pkg::W25Q128JW_CONTROLLER_IDX]),
+% if cache:
+      .w25q128jw_cache_pwr_ctrl_i(w25_cache_pwr_ctrl_o),
+      .w25q128jw_cache_pwr_ctrl_o(w25_cache_pwr_ctrl_i),
+% endif
 % else:
       .flash_ctr_reg_req_i('0),
       .flash_ctr_reg_rsp_o(),
@@ -415,6 +430,10 @@ module ao_peripheral_subsystem
       .peripheral_subsystem_pwr_ctrl_i,
       .memory_subsystem_pwr_ctrl_i,
       .external_subsystem_pwr_ctrl_i,
+% if cache:
+      .w25_cache_pwr_ctrl_i,
+      .w25_cache_pwr_ctrl_o,
+% endif
       .dma_subsystem_pwr_ctrl_o(dma_subsystem_pwr_ctrl)
   );
 
@@ -444,7 +463,7 @@ module ao_peripheral_subsystem
       .intr_timer_expired_1_0_o(rv_timer_1_intr_o)
   );
 
-% if base_peripheral_domain.contains_peripheral('dma') and xheep.get_base_peripheral_domain().get_dma().get_is_included():
+% if base_peripheral_domain.contains_peripheral('dma') and xheep.get_base_peripheral_domain().get_peripheral("dma").get_is_included():
 
   dma_subsystem #(
       .reg_req_t  (reg_req_t),

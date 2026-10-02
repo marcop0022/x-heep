@@ -13,6 +13,16 @@ build/
 .venv/
 __pycache__/
 
+# Vitis HLS scratch project directories (regenerate with generate_core.sh)
+hw/fpga/hls/vitis/*/*_proj/
+
+# Vitis HLS-generated RTL (regenerate with generate_core.sh; requires a
+# licensed Vitis HLS install -- NOTE: dot_product is currently an
+# unconditional dependency of tb/x-heep-tb-utils.core's files_examples, so
+# this file must exist before `make verilator-build`/`make vivado-fpga`
+# will work for anyone. TODO: make that dependency conditional.)
+hw/fpga/hls/vitis/*/rtl/hls/
+
 # Apps output files
 run_verif_rtl_log.txt
 
@@ -23,6 +33,7 @@ run_verif_rtl_log.txt
 tb/tb_util.svh
 tb/testharness.sv
 tb/testharness_pkg.sv
+tb/ext_bus.sv
 
 hw/core-v-mini-mcu/include/core_v_mini_mcu_pkg.sv
 hw/core-v-mini-mcu/system_bus.sv
@@ -74,7 +85,6 @@ sw/device/lib/runtime/core_v_mini_mcu.h
 sw/device/lib/runtime/core_v_mini_mcu_memory.h
 
 sw/linker/link.ld
-sw/linker/link_flash_exec.ld
 sw/linker/link_flash_load.ld
 
 sw/device/lib/drivers/soc_ctrl/soc_ctrl_regs.h
