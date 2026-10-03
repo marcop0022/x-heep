@@ -2,6 +2,8 @@
 *.log
 build/
 implementation/postsynth/
+implementation/synthesis/
+hw/asic/pdk/
 *.so
 *.hex
 *.elf

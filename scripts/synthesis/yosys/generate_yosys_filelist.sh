@@ -5,27 +5,16 @@
 #
 # This script creates a file list, from edalize_yosys_procs.tcl, that can be processed by the Slang plugin in Yosys.
 # This is done from edalize_yosys_procs.tcl as core-deps.mk also includes non SV files (.core, .py).
-# If edalize changes how the procs file is created, this script would need to be adapted.
+# The procs file is Tcl: it is sourced with stub commands that print the include
+# folders (as +incdir+) and the source files, one per line.
 # TODO : modify edalize to directly generate the correct file when using Yosys.
 
-# First create a list of include folders
-sed '/proc set_incdirs {} {/,/proc set_params {} {/!d' edalize_yosys_procs.tcl > includes.txt
-sed -i '2!d' includes.txt
-sed -i 's/}//g' includes.txt
-sed -i 's/verilog_defaults -add //g' includes.txt
-sed -i 's/-I/+incdir+/g' includes.txt
-sed -i 's/\s/\n/g' includes.txt
-
-
-# Then create the list of source files (SystemVerilog / Verilog)
-sed '/proc read_files {} {/,/proc set_defines {} {/!d' edalize_yosys_procs.tcl > source_files.txt
-sed -i '1d' source_files.txt
-sed -i '$d' source_files.txt
-sed -i '$d' source_files.txt
-sed -i '$d' source_files.txt
-sed -i 's/}//g' source_files.txt
-sed -i 's/read_verilog -sv {//g' source_files.txt
-sed -i 's/read_verilog {//g' source_files.txt
-
-# Then combine them into a single file
-cat includes.txt source_files.txt > files.flist
+tclsh > files.flist <<'TCL'
+proc verilog_defaults {args} {
+  foreach a $args { if {[string match -I* $a]} { puts "+incdir+[string range $a 2 end]" } }
+}
+proc read_verilog {args} { puts [lindex $args end] }
+source edalize_yosys_procs.tcl
+set_incdirs
+read_files
+TCL

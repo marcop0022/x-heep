@@ -102,38 +102,17 @@ module sram_wrapper #(
                 .A_BIST_REN   (  1'b0 ),
                 .A_BIST_EN    (  1'b0 )
             );
-        end else if (NumWords == 2048) begin // 8KiB
-            (* keep, blackbox *)
-            RM_IHPSG13_1P_2048x32_c2_bm_bist sram_i (
-                .A_CLK        ( clk_i   ),
-                .A_DLY        (  1'b1   ),
-                .A_ADDR       ( addr_i  ),
-                .A_BM         ( bm      ),
-                .A_MEN        ( req_i   ),
-                .A_WEN        ( we_i    ),
-                .A_REN        ( ~we_i   ),
-                .A_DIN        ( wdata_i ),
-                .A_DOUT       ( rdata_o ),
-                // BIST disabled
-                .A_BIST_CLK   (  1'b0 ),
-                .A_BIST_ADDR  (  '0   ),
-                .A_BIST_DIN   (  '0   ),
-                .A_BIST_BM    (  '0   ),
-                .A_BIST_MEN   (  1'b0 ),
-                .A_BIST_WEN   (  1'b0 ),
-                .A_BIST_REN   (  1'b0 ),
-                .A_BIST_EN    (  1'b0 )
-            );
-        end else if (NumWords == 4096 || NumWords == 8192) begin : gen_sram_2048_split // 16KiB, 32KiB
+        end else if (NumWords == 2048 || NumWords == 4096 || NumWords == 8192) begin : gen_sram_1024_split // 8KiB, 16KiB, 32KiB
+            // 1024x32 macros: the PDK has no 2048x32, and its 8192x32 has no byte mask
 
-            localparam int unsigned NumMacros = NumWords / 2048;
+            localparam int unsigned NumMacros = NumWords / 1024;
             localparam int unsigned SelWidth  = $clog2(NumMacros);
 
             logic [SelWidth-1:0]        bank_sel;
             logic [SelWidth-1:0]        bank_sel_q;
             logic [NumMacros-1:0][31:0] rdata_macro;
 
-            assign bank_sel = addr_i[AddrWidth-1:11];
+            assign bank_sel = addr_i[AddrWidth-1:10];
 
             always_ff @(posedge clk_i or negedge rst_ni) begin
                 if (!rst_ni) bank_sel_q <= '0;
@@ -144,10 +123,10 @@ module sram_wrapper #(
 
             for (genvar i = 0; i < NumMacros; i++) begin : gen_macro
                 (* keep, blackbox *)
-                RM_IHPSG13_1P_2048x32_c2_bm_bist sram_i (
+                RM_IHPSG13_1P_1024x32_c2_bm_bist sram_i (
                     .A_CLK        ( clk_i          ),
                     .A_DLY        (  1'b1          ),
-                    .A_ADDR       ( addr_i[10:0]   ),
+                    .A_ADDR       ( addr_i[9:0]    ),
                     .A_BM         ( bm             ),
                     .A_MEN        ( req_i & (bank_sel == SelWidth'(i)) ),
                     .A_WEN        ( we_i           ),

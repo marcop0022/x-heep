@@ -4,32 +4,32 @@
 #
 # IHP-SG13G2 (ihp130) technology description for the X-HEEP ASIC flows.
 #
-# Input: $IHP130 = IHP Open PDK root (the directory containing libs.ref/, or
+# Input: $PDK_XHEEP = IHP Open PDK root (the directory containing libs.ref/, or
 # its parent). Each resource can be overridden with the variable named in
 # its asic_find call below (e.g. IHP130_STDCELL_LIB).
 #
 #   TECH_NAME, TECH_ROOT_VAR     technology name, env variable of its root
 #   TECH_SIM_VLOG_FLAGS          vlog flags for the simulation models
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
-#   tech_yosys_macro_libs        Liberty of the hard cells the RTL instantiates
+#   tech_yosys_macro_libs        Liberty of the hard cells the RTL instantiates (SRAM, IO)
 #   tech_sim_models              functional Verilog models (gate-level sim)
 #   tech_sim_macro_models        the same, IO pads and SRAM macros only
 
 source [file join [file dirname [info script]] common.tcl]
 
 set TECH_NAME ihp130
-set TECH_ROOT_VAR IHP130
+set TECH_ROOT_VAR PDK_XHEEP
 
 # FUNCTIONAL: wire the SRAM macros' behavioral core to their undelayed pins
 # (otherwise to A_*_DELAY nets driven only by specify-block timing checks).
 set TECH_SIM_VLOG_FLAGS {+define+FUNCTIONAL}
 
 proc _ihp130_ref {} {
-  set root [asic_root IHP130 "IHP-SG13G2 PDK"]
+  set root [asic_root PDK_XHEEP "IHP-SG13G2 PDK"]
   foreach cand [list $root/libs.ref $root/ihp-sg13g2/libs.ref] {
     if {[file isdirectory $cand]} { return $cand }
   }
-  error "\[asic] \$IHP130=$root: no libs.ref/ directory under it."
+  error "\[asic] \$PDK_XHEEP=$root: no libs.ref/ directory under it."
 }
 
 proc tech_stdcell_libs {} {
@@ -44,7 +44,13 @@ proc _ihp130_sram_libs {} {
     [list "$ref/sg13g2_sram/lib/*_typ_1p20V_25C.lib"]]
 }
 
-proc tech_yosys_macro_libs {} { return [_ihp130_sram_libs] }
+proc _ihp130_io_libs {} {
+  set ref [_ihp130_ref]
+  return [asic_find "IHP IO Liberty" IHP130_IO_LIB \
+    [list $ref/sg13g2_io/lib/sg13g2_io_typ_1p2V_3p3V_25C.lib]]
+}
+
+proc tech_yosys_macro_libs {} { return [concat [_ihp130_sram_libs] [_ihp130_io_libs]] }
 
 proc tech_sim_models {} {
   set ref [_ihp130_ref]

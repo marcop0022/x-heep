@@ -52,7 +52,8 @@ FUSESOC_BUILD_DIR = $(shell find $(BUILD_DIR) -maxdepth 1 -type d -name 'openhwg
 VERILATOR_DIR     = $(FUSESOC_BUILD_DIR)/sim-verilator
 QUESTASIM_DIR     = $(FUSESOC_BUILD_DIR)/sim-modelsim
 QUESTASIM_POSTSYNTH_DIR = $(FUSESOC_BUILD_DIR)/sim_postsynthesis-modelsim
-ASIC_YOSYS_NETLIST   = $(FUSESOC_BUILD_DIR)/asic_yosys_synthesis-yosys/asic_x_heep_system.v
+SYNTH_DIR            = implementation/synthesis
+ASIC_YOSYS_NETLIST   = $(SYNTH_DIR)/last_output/netlist.v
 POSTSYNTH_DIR        = implementation/postsynth
 POSTSYNTH_NETLIST    = $(POSTSYNTH_DIR)/x_heep_system_netlist.v
 POSTSYNTH_MAX_CYCLES ?= 5000000
@@ -60,6 +61,11 @@ POSTSYNTH_VERILATOR_CELLS = $(POSTSYNTH_DIR)/x_heep_system_cells_verilator.sv
 VERILATOR_POSTSYNTH_DIR   = $(FUSESOC_BUILD_DIR)/sim_postsynthesis_verilator-verilator
 # Technology of `make asic-tech-check`
 TECH ?= ihp130
+# PDK root shared by the ASIC flows (ciel-style: contains e.g. ihp-sg13g2/). Gitignored, fetched by `make pdk`.
+PDK_XHEEP   ?= $(mkfile_path)/hw/asic/pdk
+override PDK_XHEEP := $(abspath $(PDK_XHEEP))
+PDK         ?= ihp-sg13g2
+PDK_VERSION ?= 3b5a704ba6738aa686b08706187830e6284d2a10
 
 # Project options are based on the app to be built (default - hello_world)
 PROJECT ?= hello_world
@@ -337,9 +343,22 @@ vivado-fpga-remote-pgm:
 asic:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=asic_synthesis $(FUSESOC_FLAGS) --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee builddesigncompiler.log
 
-## Yosys synthesis for IHP-SG13G2 (needs $IHP130)
-asic-yosys:
-	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+## Downloads the PDK with ciel into PDK_XHEEP, unless it is already there
+## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
+## @param PDK_VERSION=<ciel version hash>
+pdk:
+	@test -d "$(PDK_XHEEP)/$(PDK)/libs.ref" || ciel enable --pdk-root "$(PDK_XHEEP)" --pdk-family $(PDK) $(PDK_VERSION)
+
+## Yosys synthesis for IHP-SG13G2. Log, netlist and reports in implementation/synthesis/last_output
+## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
+asic-yosys: pdk
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+	@work=$$(ls -d $(BUILD_DIR)/openhwgroup.org_systems_core-v-mini-mcu_*/asic_yosys_synthesis-yosys | sort -V | head -n 1); \
+	out=$(SYNTH_DIR)/output_$$(date +%Y_%m_%d_%H-%M-%S); mkdir -p $$out; \
+	cp -R $$work/report/. $$work/yosys.log $$out/; \
+	test -f $$out/netlist.v || { echo "ERROR: synthesis failed, see $$out/yosys.log"; exit 1; }; \
+	rm -rf $(SYNTH_DIR)/last_output && cp -R $$out $(SYNTH_DIR)/last_output && \
+	echo "Synthesis log, netlist and reports in $$out (copied to $(SYNTH_DIR)/last_output)"
 
 ## Prints what the ASIC flows find in the design kit of TECH, and what is missing (needs tclsh)
 ## @param TECH=[ihp130(default)]
@@ -392,11 +411,13 @@ verilator-run-postsynth:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --run openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) \
 		--run_options="+firmware=../../../sw/build/main.hex +boot_sel=1 +max_sim_time=$(POSTSYNTH_MAX_CYCLES) $(SIM_ARGS)"
 
-librelane-setup-chip-ihp:
-	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_librelane_chip_ihp --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildlibrelanechip.log
+## Sets up the Librelane IHP-SG13G2 chip/macro flows in build/
+## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
+librelane-setup-chip-ihp: pdk
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_librelane_chip_ihp --setup openhwgroup.org:systems:core-v-mini-mcu --pdk_root $(PDK_XHEEP) $(FUSESOC_PARAM) 2>&1 | tee buildlibrelanechip.log
 
-librelane-setup-macro-ihp:
-	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_librelane_macro_ihp --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildlibrelanemacro.log
+librelane-setup-macro-ihp: pdk
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_librelane_macro_ihp --setup openhwgroup.org:systems:core-v-mini-mcu --pdk_root $(PDK_XHEEP) $(FUSESOC_PARAM) 2>&1 | tee buildlibrelanemacro.log
 
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 

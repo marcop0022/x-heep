@@ -102,6 +102,8 @@ make librelane-setup-chip-ihp
 make librelane-setup-macro-ihp
 ```
 
+The PDK is not part of the repository. `PDK_XHEEP` points to the folder containing `ihp-sg13g2/` (default: `hw/asic/pdk`, gitignored). `make pdk` (also run by `make asic-yosys` and the `librelane-setup-*` targets) downloads it there with [ciel](https://github.com/fossi-foundation/ciel) if it is missing, using version `PDK_VERSION`. To reuse an existing install, e.g. the `ciel` default: `make librelane-setup-macro-ihp PDK_XHEEP=~/.ciel`.
+
 These command will create the appropriate `Makefile` in the `build` folder. They only run the `fusesoc` setup step, as Librelane will probably not be installed on the same environment as the `x-heep` tools.
 
 In case you installed Librelane using Nix, enter the cloned Librelane repo, and type `nix-shell`. Then navigate to the generated folder inside `x-heep/build/.../asic_librelane_macro_ihp-librelane`.

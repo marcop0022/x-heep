@@ -56,14 +56,23 @@ foreach macro_lib [tech_yosys_macro_libs] {
 	yosys read_liberty -lib -overwrite $macro_lib
 }
 
+# Reports and netlist go to report/; `make asic-yosys` copies them, with the log,
+# to implementation/synthesis/ (as the design_compiler flow does)
+file delete -force report
+file mkdir report
+
 yosys synth -top $synth_top
+yosys tee -o report/check_design.rpt check
 yosys dfflibmap -liberty $stdcell_lib
 yosys abc -liberty $stdcell_lib
 yosys clean
 
-# Human-readable name for the X-HEEP ASIC flow ...
-yosys write_verilog -noattr asic_x_heep_system.v
+set stat_libs {}
+foreach lib [concat [list $stdcell_lib] [tech_yosys_macro_libs]] { lappend stat_libs -liberty $lib }
+yosys tee -o report/area.rpt stat {*}$stat_libs
 
-# ... and the names the edalize `yosys` backend may expect as its Make target
+yosys write_verilog -noattr report/netlist.v
+
+# The names the edalize `yosys` backend may expect as its Make target
 yosys write_verilog -noattr $name.v
 yosys write_verilog -noattr $name.verilog
