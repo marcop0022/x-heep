@@ -7,8 +7,10 @@
 #
 # Modified on the 05/08/2026 by Nathan Chandanson to implement an ASIC padring.
 #
+
 import sys, os
 
+sys.path.append(os.path.dirname(__file__))  # configs/, for pad_cfg
 sys.path.append(
     os.path.join(os.path.dirname(__file__), "..", "hw", "asic", "ihp-sg13g2")
 )
@@ -19,72 +21,13 @@ from pads.floorplan import Side
 from pads.pin import Input, Output, Inout
 from pad_definition import PinVdd, PinVss, PinIoVdd, PinIoVss
 
+import pad_cfg
 
 def config(xheep: XHeep) -> PadRing:
     """
     Build and return the PadRing for the design, including pin definitions and pad mapping.
     For detailed documentation and usage instructions, please refer to docs/source/Configuration/PadConfiguration.md
     """
-
-    ##############################################
-    # DEFINE ALL THE AVAILABLE PINS (SIGNALS)
-
-    digital_pins = [
-        Input("clk"),
-        Input("rst", module="x_heep_system", attributes={"active": "low"}),
-        Input("boot_select"),
-        Input("execute_from_flash"),
-        Input("jtag_tck"),
-        Input("jtag_tms"),
-        Input("jtag_trst", attributes={"active": "low"}),
-        Input("jtag_tdi"),
-        Output("jtag_tdo"),
-        Input("uart_rx"),
-        Output("uart_tx"),
-        Output("exit_valid"),
-        Inout("spi_flash_sck"),
-        Inout("spi_flash_cs_0"),
-        Inout("spi_flash_cs_1"),
-        Inout("spi_flash_sd_0"),
-        Inout("spi_flash_sd_1"),
-        Inout("spi_flash_sd_2"),
-        Inout("spi_flash_sd_3"),
-        Inout("spi_sck"),
-        Inout("spi_cs_0"),
-        Inout("spi_cs_1"),
-        Inout("spi_sd_0"),
-        Inout("spi_sd_1"),
-        Inout("spi_sd_2"),
-        Inout("spi_sd_3"),
-        Input("spi_slave_sck"),
-        Input("spi_slave_cs"),
-        Inout("spi_slave_miso"),
-        Input("spi_slave_mosi"),
-        Inout("pdm2pcm_pdm"),
-        Inout("pdm2pcm_clk"),
-        Inout("i2s_sck"),
-        Inout("i2s_ws"),
-        Inout("i2s_sd"),
-        Inout("spi2_cs_0"),
-        Inout("spi2_cs_1"),
-        Inout("spi2_sck"),
-        Inout("spi2_sd_0"),
-        Inout("spi2_sd_1"),
-        Inout("spi2_sd_2"),
-        Inout("spi2_sd_3"),
-        Inout("i2c_scl"),
-        Inout("i2c_sda"),
-        Input("ddr_rcv_clk"),
-        Output("ddr_snd_clk"),
-        Input("ddr_rcv_0"),
-        Input("ddr_rcv_1"),
-        Input("ddr_rcv_2"),
-        Input("ddr_rcv_3"),
-        Output("ddr_snd_0"),
-        Output("ddr_snd_1"),
-        Output("ddr_snd_2"),
-        Output("ddr_snd_3"),
-    ]
 
     ##############################################
     # DEFINE ALL THE AVAILABLE PINS (POWER)
@@ -100,9 +43,8 @@ def config(xheep: XHeep) -> PadRing:
     ]
 
     # Add all gpios at once
-    for i in range(32):
-        digital_pins.append(Inout(f"gpio_{i}", attributes={"priority": 0}))
-
+    digital_pins = pad_cfg.digital_pins()
+    
     # Generate a pin dict with all these pins
     pin_dict = {}
     for pin in digital_pins:
@@ -121,7 +63,6 @@ def config(xheep: XHeep) -> PadRing:
             ["clk"],
             ["rst"],
             ["boot_select"],
-            ["execute_from_flash"],
             ["jtag_tck"],
             ["jtag_tms"],
             ["jtag_trst"],
@@ -149,16 +90,15 @@ def config(xheep: XHeep) -> PadRing:
             ["gpio_10", "ddr_snd_3"],
             ["gpio_11"],
             ["gpio_12"],
-            ["gpio_13"],
             ["spi_flash_sck"],
             ["spi_flash_cs_0"],
+            ["spi_flash_cs_1"],
             ["iovdd0"],
             ["iovss0"],
         ],
         Side.BOTTOM: [
             ["vdd1"],
             ["vss1"],
-            ["spi_flash_cs_1"],
             ["spi_flash_sd_0"],
             ["spi_flash_sd_1"],
             ["spi_flash_sd_2"],
@@ -170,19 +110,20 @@ def config(xheep: XHeep) -> PadRing:
             ["spi_sd_1"],
             ["spi_sd_2"],
             ["spi_sd_3"],
-            ["spi_slave_sck", "gpio_14"],
-            ["spi_slave_cs", "gpio_15"],
-            ["spi_slave_miso", "gpio_16"],
+            ["spi_slave_sck", "gpio_13"],
+            ["spi_slave_cs", "gpio_14"],
+            ["spi_slave_miso", "gpio_15"],
+            ["spi_slave_mosi", "gpio_16"],
         ],
         Side.RIGHT: [
             ["iovdd1"],
             ["iovss1"],
-            ["spi_slave_mosi", "gpio_17"],
-            ["pdm2pcm_pdm", "gpio_18"],
-            ["pdm2pcm_clk", "gpio_19"],
-            ["i2s_sck", "gpio_20"],
-            ["i2s_ws", "gpio_21"],
-            ["i2s_sd", "gpio_22"],
+            ["pdm2pcm_pdm", "gpio_17"],
+            ["pdm2pcm_clk", "gpio_18"],
+            ["i2s_sck", "gpio_19"],
+            ["i2s_ws", "gpio_20"],
+            ["i2s_sd_rx", "gpio_21"],
+            ["i2s_sd_tx", "gpio_22"],
             ["spi2_cs_0", "gpio_23"],
             ["spi2_cs_1", "gpio_24"],
             ["spi2_sck", "gpio_25"],
