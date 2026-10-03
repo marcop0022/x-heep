@@ -392,6 +392,12 @@ verilator-run-postsynth:
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --run openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) \
 		--run_options="+firmware=../../../sw/build/main.hex +boot_sel=1 +max_sim_time=$(POSTSYNTH_MAX_CYCLES) $(SIM_ARGS)"
 
+librelane-setup-chip-ihp:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_librelane_chip_ihp --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildlibrelanechip.log
+
+librelane-setup-macro-ihp:
+	$(FUSESOC) --verbose --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_librelane_macro_ihp --setup openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildlibrelanemacro.log
+
 ## @section Program, Execute, and Debug w/ EPFL_Programmer
 
 ## Read the id from the EPFL_Programmer flash

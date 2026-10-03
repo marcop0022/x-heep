@@ -92,6 +92,7 @@ filesets:
   rtl-fpga:
     depend:
     - x-heep:x-heep:x-heep-fpga-support
+    - use_hls_example ? (epfl:ip:dot_product)
     files:
     - hw/fpga/xilinx_core_v_mini_mcu_wrapper.sv
     file_type: systemVerilogSource
@@ -168,6 +169,10 @@ filesets:
   lib-sky130:
     files:
       - hw/asic/sky130/sky130_sram_4kbyte_1rw_32x1024_8_TT_1p8V_25C.lib : { copyto: lib/sky130_sram_4kbyte_1rw_32x1024_8_TT_1p8V_25C.lib }
+
+  asic-ihp-sg13g2:
+    depend:
+    - technology::prim_ihp-sg13g2
 
   # Scripts for hooks
   post_build_modelsim_scripts:
@@ -313,6 +318,16 @@ parameters:
     description: Turn off asserts for PULP common cells
     paramtype: vlogdefine
     default: false
+  USE_HLS_EXAMPLE:
+    datatype: bool
+    paramtype: vlogdefine
+    description: |
+      Include the Vitis HLS-generated dot_product example accelerator in
+      the testbench. Enable with `--flag use_hls_example`, which also
+      triggers the generate_hls_dot_product pre-build hook (runs Vitis
+      HLS) and pulls in epfl:ip:dot_product -- so without the flag,
+      building/simulating X-HEEP never requires Vitis HLS to be installed.
+    default: false
 
 scripts:
   # Build utils
@@ -336,6 +351,10 @@ scripts:
     cmd:
     - python
     - ../../../scripts/sim/vcs/patch_vcs_ams_Makefile.py
+  generate_hls_dot_product:
+    cmd:
+    - bash
+    - ../../../hw/fpga/hls/vitis/dot_product/generate_core.sh
 
   patch_vpk_run:
     cmd:
@@ -403,6 +422,7 @@ targets:
         - ams_sim? (pre_patch_vcs_ams_Makefile)
         - tool_xcelium? (pre_build_uartdpi)
         - tool_xcelium? (pre_build_remote_bitbang)
+        - use_hls_example? (generate_hls_dot_product)
       pre_run:
         - remove_uart_log
       post_run:
@@ -414,6 +434,7 @@ targets:
     - REMOVE_OBI_FIFO
     - COMMON_CELLS_ASSERTS_OFF
     - ASSERTS_OFF
+    - use_hls_example ? (USE_HLS_EXAMPLE=true)
     tools:
       modelsim:
         vlog_options:
@@ -462,6 +483,18 @@ targets:
           - '--trace-max-array 1024'
           - '--x-assign unique'
           - '--x-initial unique'
+          # Vitis HLS-generated RTL (e.g. hw/fpga/hls/vitis/dot_product) uses
+          # zero-time delay statements in a couple of small pipeline flow
+          # control modules, purely as a simulation-only race-avoidance
+          # trick with no real timing meaning. Verilator 5.x requires an
+          # explicit choice of how to handle any delay/event control it
+          # sees; --no-timing tells it to treat them as zero-time, which is
+          # exactly what they already are.
+          - '--no-timing'
+          # Direct, expected consequence of --no-timing above: Verilator
+          # notes (as a warning) every delay statement it's ignoring. Not
+          # actionable -- that's exactly what we asked it to do.
+          - '-Wno-STMTDLY'
           - '--exe tb_top.cpp'
           - '-CFLAGS "-Wall -fpermissive"'
           - '-LDFLAGS "-pthread -lutil -lelf"'
@@ -641,6 +674,10 @@ targets:
     - SYNTHESIS=true
     - REMOVE_OBI_FIFO
     - FPGA_SYNTHESIS=true
+    - use_hls_example ? (USE_HLS_EXAMPLE=true)
+    hooks:
+      pre_build:
+        - use_hls_example? (generate_hls_dot_product)
     tools:
       vivado:
         part: xc7z020clg400-1
@@ -795,3 +832,46 @@ targets:
         arch: generic
         output_format: verilog
         yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_template.tcl
+
+  asic_librelane_chip_ihp:
+    <<: *default_target
+    default_tool: librelane
+    description: Librelane flow to get an X-Heep chip on IHP-SG13G2.
+    parameters:
+      - SYNTHESIS=true
+    filesets_append:
+      - asic-ihp-sg13g2
+    toplevel: [ihp_sg13g2_asic_x_heep_system_wrapper]
+    tools:
+      librelane:
+        flow: Chip
+        remove_steps:
+          - Magic.DRC           # Too long
+          - Checker.MagicDRC
+          - Checker.IllegalOverlap  # Uninteresting
+        clock_port: clk_i
+        clock_net: pad_ring_i.u_pad_clk.pad_cell_input/p2c
+        clock_period: 20
+        die_area: [0,0,5000,5000]
+        core_area: [365,365,4635,4635]
+
+  asic_librelane_macro_ihp:
+    <<: *default_target
+    default_tool: librelane
+    description: Librelane flow to get an X-Heep macro on IHP-SG13G2.
+    parameters:
+      - SYNTHESIS=true
+    filesets_append:
+      - asic-ihp-sg13g2
+    toplevel: [ihp_sg13g2_asic_x_heep_system_wrapper]
+    tools:
+      librelane:
+        flow: Classic
+        remove_steps:
+          - Magic.DRC               # Too long
+          - Checker.MagicDRC
+          - Checker.IllegalOverlap  # Uninteresting
+        clock_port: clk_i
+        clock_net: clk_i
+        clock_period: 20
+        die_area: [0,0,4000,4000]

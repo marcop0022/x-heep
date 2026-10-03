@@ -14,8 +14,9 @@ import re
 import logging
 from mako.template import Template
 import load_config
-from xheep import BusType
+from bus_type import BusType
 from cpu.cpu import CPU
+import os
 
 
 # ANSI color codes for pretty printing
@@ -90,8 +91,35 @@ def generate_xheep(args):
     # Validate the configuration, performing some sanity checks
     xheep.validate()
 
+    if (
+        int(stack_size, 16) + int(heap_size, 16)
+    ) > xheep.memory_ss().ram_size_address():
+        exit(
+            "The stack and heap section must fit in the RAM size, instead they take "
+            + str(int(stack_size, 16) + int(heap_size, 16))
+            + " bytes while RAM size is "
+            + str(xheep.memory_ss().ram_size_address())
+            + " bytes."
+        )
+
+    # Extract the target environment variable
+    impl_target = os.getenv("TARGET")
+
     kwargs = {
         "xheep": xheep,
+        "debug_start_address": debug_start_address,
+        "debug_size_address": debug_size_address,
+        "has_spi_slave": has_spi_slave,
+        "ext_slave_start_address": ext_slave_start_address,
+        "ext_slave_size_address": ext_slave_size_address,
+        "flash_mem_start_address": flash_mem_start_address,
+        "flash_mem_size_address": flash_mem_size_address,
+        "stack_size": stack_size,
+        "heap_size": heap_size,
+        "plic_used_n_interrupts": plic_used_n_interrupts,
+        "plit_n_interrupts": plit_n_interrupts,
+        "interrupts": interrupts,
+        "impl_target": impl_target,
     }
 
     return kwargs
@@ -105,7 +133,16 @@ def main():
         metavar="file",
         type=str,
         required=True,
-        help="X-HEEP general configuration",
+        help="System general configuration (.py or .hjson)",
+    )
+
+    parser.add_argument(
+        "--system",
+        metavar="xheep,xalp",
+        choices=["xheep", "xalp"],
+        nargs="?",
+        default="xheep",
+        help="System to generate: xheep or xalp (default: xheep)",
     )
 
     parser.add_argument(
@@ -180,11 +217,20 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"{Colors.BLUE}[MCU-GEN]{Colors.RESET} Generating X-HEEP configuration...")
-    kwargs = generate_xheep(args)
-    print(
-        f"{Colors.GREEN}[MCU-GEN]{Colors.RESET} X-HEEP configuration generated successfully"
-    )
+    if args.system == "xalp":
+        print(f"{Colors.BLUE}[MCU-GEN]{Colors.RESET} Generating X-ALP configuration...")
+        kwargs = generate_xalp(args)
+        print(
+            f"{Colors.GREEN}[MCU-GEN]{Colors.RESET} X-ALP configuration generated successfully"
+        )
+    else:
+        print(
+            f"{Colors.BLUE}[MCU-GEN]{Colors.RESET} Generating X-HEEP configuration..."
+        )
+        kwargs = generate_xheep(args)
+        print(
+            f"{Colors.GREEN}[MCU-GEN]{Colors.RESET} X-HEEP configuration generated successfully"
+        )
 
     # Handle single template or multiple templates
     outtpl_list = [t for t in re.split(r"[,\s]+", args.outtpl or "") if t]
