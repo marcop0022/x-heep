@@ -29,10 +29,11 @@ filesets:
       - librelane_pdn_cfg.tcl        : { file_type: pdn }
 
   files_chip:
+    depend:
+      - x-heep:ip:pad-ring
     files:
       - librelane_chip_config.yaml              : { file_type: librelaneConfig }
       - librelane_chip_fallback_pnr_signoff.sdc : { file_type: SDC }
-      - rtl/pad_ring.sv
       - rtl/ihp_sg13g2_asic_chip_x_heep_system_wrapper.sv
     file_type: systemVerilogSource
 

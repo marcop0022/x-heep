@@ -23,6 +23,7 @@ from pad_definition import PinVdd, PinVss, PinIoVdd, PinIoVss
 
 import pad_cfg
 
+
 def config(xheep: XHeep) -> PadRing:
     """
     Build and return the PadRing for the design, including pin definitions and pad mapping.
@@ -44,7 +45,7 @@ def config(xheep: XHeep) -> PadRing:
 
     # Add all gpios at once
     digital_pins = pad_cfg.digital_pins()
-    
+
     # Generate a pin dict with all these pins
     pin_dict = {}
     for pin in digital_pins:

@@ -1,7 +1,3 @@
-<%
-    if impl_target != "asic_ihp":
-        return STOP_RENDERING
-%>
 <%!
     from pads.pin import Input, Output, Inout
     from pads.pad import Pad
@@ -120,7 +116,7 @@ cpu_subsystem_powergate_switch_ack_ni.*
 peripheral_subsystem_powergate_switch_no.*
 peripheral_subsystem_powergate_switch_ack_ni.*
 
-% if xheep.get_base_peripheral_domain().get_power_manager().get_external_domains() != 0:
+% if xheep.get_base_peripheral_domain().get_peripheral("power_manager").get_external_domains() != 0:
 external_subsystem_powergate_switch_no\[.*
 external_subsystem_powergate_switch_ack_ni\[.*
 external_subsystem_powergate_iso_no\[.*

@@ -10,78 +10,80 @@ from pads.pad_ring import PadRing
 from pads.floorplan import Side
 from pads.pin import Input, Output, Inout
 
+
 def digital_pins():
     pins = [
-            Input("clk"),
-            Input("rst", module="x_heep_system", attributes={"active": "low"}),
-            Input("boot_select"),
-            Output("exit_valid"),
-            # JTAG
-            Input("jtag_tck"),
-            Input("jtag_tms"),
-            Input("jtag_trst", attributes={"active": "low"}),
-            Input("jtag_tdi"),
-            Output("jtag_tdo"),
-            # UART
-            Input("uart_rx"),
-            Output("uart_tx"),
-            # SPI Flash
-            Inout("spi_flash_sck"),
-            Inout("spi_flash_cs_0"),
-            Inout("spi_flash_cs_1"),
-            Inout("spi_flash_sd_0"),
-            Inout("spi_flash_sd_1"),
-            Inout("spi_flash_sd_2"),
-            Inout("spi_flash_sd_3"),
-            # SPI Host
-            Inout("spi_sck"),
-            Inout("spi_cs_0"),
-            Inout("spi_cs_1"),
-            Inout("spi_sd_0"),
-            Inout("spi_sd_1"),
-            Inout("spi_sd_2"),
-            Inout("spi_sd_3"),
-            # SPI Slave
-            # In the debug_ss. If the debug_ss does not have an SPI slave, these pins should be removed.
-            Input("spi_slave_sck"),
-            Input("spi_slave_cs"),
-            Inout("spi_slave_miso"),
-            Input("spi_slave_mosi"),
-            # PDM2PCM
-            Inout("pdm2pcm_pdm"),
-            Inout("pdm2pcm_clk"),
-            # I2S
-            Inout("i2s_sck"),
-            Inout("i2s_ws"),
-            Input("i2s_sd_rx"),
-            Output("i2s_sd_tx"),
-            # SPI2
-            Inout("spi2_cs_0"),
-            Inout("spi2_cs_1"),
-            Inout("spi2_sck"),
-            Inout("spi2_sd_0"),
-            Inout("spi2_sd_1"),
-            Inout("spi2_sd_2"),
-            Inout("spi2_sd_3"),
-            # I2C
-            Inout("i2c_scl"),
-            Inout("i2c_sda"),
-            # Serial link DDR
-            Input("ddr_rcv_clk"),
-            Output("ddr_snd_clk"),
-            Input("ddr_rcv_0"),
-            Input("ddr_rcv_1"),
-            Input("ddr_rcv_2"),
-            Input("ddr_rcv_3"),
-            Output("ddr_snd_0"),
-            Output("ddr_snd_1"),
-            Output("ddr_snd_2"),
-            Output("ddr_snd_3"),
-        ]
+        Input("clk"),
+        Input("rst", module="x_heep_system", attributes={"active": "low"}),
+        Input("boot_select"),
+        Output("exit_valid"),
+        # JTAG
+        Input("jtag_tck"),
+        Input("jtag_tms"),
+        Input("jtag_trst", attributes={"active": "low"}),
+        Input("jtag_tdi"),
+        Output("jtag_tdo"),
+        # UART
+        Input("uart_rx"),
+        Output("uart_tx"),
+        # SPI Flash
+        Inout("spi_flash_sck"),
+        Inout("spi_flash_cs_0"),
+        Inout("spi_flash_cs_1"),
+        Inout("spi_flash_sd_0"),
+        Inout("spi_flash_sd_1"),
+        Inout("spi_flash_sd_2"),
+        Inout("spi_flash_sd_3"),
+        # SPI Host
+        Inout("spi_sck"),
+        Inout("spi_cs_0"),
+        Inout("spi_cs_1"),
+        Inout("spi_sd_0"),
+        Inout("spi_sd_1"),
+        Inout("spi_sd_2"),
+        Inout("spi_sd_3"),
+        # SPI Slave
+        # In the debug_ss. If the debug_ss does not have an SPI slave, these pins should be removed.
+        Input("spi_slave_sck"),
+        Input("spi_slave_cs"),
+        Inout("spi_slave_miso"),
+        Input("spi_slave_mosi"),
+        # PDM2PCM
+        Inout("pdm2pcm_pdm"),
+        Inout("pdm2pcm_clk"),
+        # I2S
+        Inout("i2s_sck"),
+        Inout("i2s_ws"),
+        Input("i2s_sd_rx"),
+        Output("i2s_sd_tx"),
+        # SPI2
+        Inout("spi2_cs_0"),
+        Inout("spi2_cs_1"),
+        Inout("spi2_sck"),
+        Inout("spi2_sd_0"),
+        Inout("spi2_sd_1"),
+        Inout("spi2_sd_2"),
+        Inout("spi2_sd_3"),
+        # I2C
+        Inout("i2c_scl"),
+        Inout("i2c_sda"),
+        # Serial link DDR
+        Input("ddr_rcv_clk"),
+        Output("ddr_snd_clk"),
+        Input("ddr_rcv_0"),
+        Input("ddr_rcv_1"),
+        Input("ddr_rcv_2"),
+        Input("ddr_rcv_3"),
+        Output("ddr_snd_0"),
+        Output("ddr_snd_1"),
+        Output("ddr_snd_2"),
+        Output("ddr_snd_3"),
+    ]
 
     for i in range(32):
         pins.append(Inout(f"gpio_{i}", attributes={"priority": 0}))
     return pins
+
 
 def config(xheep: XHeep) -> PadRing:
     """
@@ -92,7 +94,7 @@ def config(xheep: XHeep) -> PadRing:
     # Generate a pin dict with all these pins
 
     pin_dict = {pin.name: pin for pin in digital_pins()}
-    
+
     ##############################################
     # MAP PINS TO PADS
     # And assign them sides. If you don't care about sides (i.e. just want to simulate and/or FPGA)

@@ -16,7 +16,6 @@ from mako.template import Template
 import load_config
 from bus_type import BusType
 from cpu.cpu import CPU
-import os
 
 
 # ANSI color codes for pretty printing
@@ -91,35 +90,40 @@ def generate_xheep(args):
     # Validate the configuration, performing some sanity checks
     xheep.validate()
 
-    if (
-        int(stack_size, 16) + int(heap_size, 16)
-    ) > xheep.memory_ss().ram_size_address():
-        exit(
-            "The stack and heap section must fit in the RAM size, instead they take "
-            + str(int(stack_size, 16) + int(heap_size, 16))
-            + " bytes while RAM size is "
-            + str(xheep.memory_ss().ram_size_address())
-            + " bytes."
-        )
-
-    # Extract the target environment variable
-    impl_target = os.getenv("TARGET")
-
     kwargs = {
         "xheep": xheep,
-        "debug_start_address": debug_start_address,
-        "debug_size_address": debug_size_address,
-        "has_spi_slave": has_spi_slave,
-        "ext_slave_start_address": ext_slave_start_address,
-        "ext_slave_size_address": ext_slave_size_address,
-        "flash_mem_start_address": flash_mem_start_address,
-        "flash_mem_size_address": flash_mem_size_address,
-        "stack_size": stack_size,
-        "heap_size": heap_size,
-        "plic_used_n_interrupts": plic_used_n_interrupts,
-        "plit_n_interrupts": plit_n_interrupts,
-        "interrupts": interrupts,
-        "impl_target": impl_target,
+    }
+
+    return kwargs
+
+
+def generate_xalp(args):
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+
+    # X-ALP is configured exclusively through the Python configuration file.
+    if not str(args.config).endswith(".py"):
+        exit("X-ALP generation requires a Python configuration file (--config *.py)")
+
+    xalp = load_config.load_cfg_file(pathlib.PurePath(str(args.config)))
+
+    # Load pads configuration file
+    pad_ring = load_config.load_pad_cfg(pathlib.PurePath(str(args.pads_cfg)), xalp)
+    if pad_ring is None:
+        exit(f"Error loading pads configuration file: {args.pads_cfg}")
+    xalp.set_padring(pad_ring)
+
+    # Here the X-ALP system is built and validated.
+    xalp.build()
+    xalp.validate()
+
+    # "xalp" is the X-ALP specific handle; "xheep" is also exposed so that
+    # templates shared with the X-HEEP flow (which only use system-level
+    # accessors such as get_padring()) render unchanged for both systems.
+    kwargs = {
+        "xalp": xalp,
+        "xheep": xalp,
     }
 
     return kwargs

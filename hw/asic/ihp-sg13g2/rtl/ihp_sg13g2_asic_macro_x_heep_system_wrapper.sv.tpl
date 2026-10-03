@@ -8,21 +8,18 @@
 //
 
 <%
-    if impl_target != "asic_ihp":
-        return STOP_RENDERING
-%>
-<%
   user_peripheral_domain = xheep.get_user_peripheral_domain()
 %>
 <%!
     from pads.pin import Input, Output, Inout, PinDigital, Asignal
-    from pad_definition import PinVdd, PinVss, PinIoVdd, PinIoVss, PinPower
+    def is_a(pin, cls):
+        return any(c.__name__ == cls for c in type(pin).__mro__)
 %>
 
 <%
     attribute_bits = xheep.get_padring().attributes.get("bits")
     any_muxed_pads = xheep.get_padring().num_muxed_pads() > 0
-    power_pads = [ pad for pad in xheep.get_padring().pad_list if any(isinstance(pin, PinPower) for pin in pad.pins) ]
+    power_pads = [ pad for pad in xheep.get_padring().pad_list if any(is_a(pin, "PinPower") for pin in pad.pins) ]
 %>
 
 module ihp_sg13g2_asic_x_heep_system_wrapper
@@ -130,10 +127,10 @@ import cv32e40px_core_v_xif_pkg::*;
     % if power_pads:
         `ifdef USE_POWER_PINS
         <%
-        has_vdd = any(isinstance(pin, PinVdd) for pad in power_pads for pin in pad.pins)
-        has_vss = any(isinstance(pin, PinVss) for pad in power_pads for pin in pad.pins)
-        has_iovdd = any(isinstance(pin, PinIoVdd) for pad in power_pads for pin in pad.pins)
-        has_iovss = any(isinstance(pin, PinIoVss) for pad in power_pads for pin in pad.pins)
+        has_vdd = any(is_a(pin, "PinVdd") for pad in power_pads for pin in pad.pins)
+        has_vss = any(is_a(pin, "PinVss") for pad in power_pads for pin in pad.pins)
+        has_iovdd = any(is_a(pin, "PinIoVdd") for pad in power_pads for pin in pad.pins)
+        has_iovss = any(is_a(pin, "PinIoVss") for pad in power_pads for pin in pad.pins)
         %>\
         % if has_vdd:
         inout wire vdd_io,
@@ -151,7 +148,7 @@ import cv32e40px_core_v_xif_pkg::*;
     % endif
 
     <%
-    power_pads = [ pad for pad in xheep.get_padring().pad_list if any(isinstance(pin, PinPower) for pin in pad.pins) ] 
+    power_pads = [ pad for pad in xheep.get_padring().pad_list if any(is_a(pin, "PinPower") for pin in pad.pins) ] 
     %>
     % for pad in [pad for pad in xheep.get_padring().pad_list if pad not in power_pads]:
       <%

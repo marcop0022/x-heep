@@ -1,11 +1,8 @@
 # NOTE: This file is based on the IHP-GmbH/ihp-sg13g2-librelane-template (https://github.com/IHP-GmbH/ihp-sg13g2-librelane-template) github repo
-<%
-    if impl_target != "asic_ihp":
-        return STOP_RENDERING
-%>
 <%!
     from pads.pin import Input, Output, Inout
-    from pad_definition import PinPower
+    def is_a(pin, cls):
+        return any(c.__name__ == cls for c in type(pin).__mro__)
 %>
 current_design $::env(DESIGN_NAME)
 set_units -time ns
@@ -53,7 +50,7 @@ set clocks [get_clocks $clock_port]
 # Input-only pads
 set clk_core_input_ports [get_ports { 
 <%
-power_pads = [ pad for pad in xheep.get_padring().pad_list if any(isinstance(pin, PinPower) for pin in pad.pins) ] 
+power_pads = [ pad for pad in xheep.get_padring().pad_list if any(is_a(pin, "PinPower") for pin in pad.pins) ] 
 %>
 % for pad in [pad for pad in xheep.get_padring().pad_list if pad not in power_pads]:
   <%
@@ -79,7 +76,7 @@ set_input_delay -max $input_delay_value -clock $clocks $clk_core_input_ports
 # Output-only pads
 set clk_core_output_ports [get_ports { 
 <%
-power_pads = [ pad for pad in xheep.get_padring().pad_list if any(isinstance(pin, PinPower) for pin in pad.pins) ] 
+power_pads = [ pad for pad in xheep.get_padring().pad_list if any(is_a(pin, "PinPower") for pin in pad.pins) ] 
 %>
 % for pad in [pad for pad in xheep.get_padring().pad_list if pad not in power_pads]:
   <%
@@ -102,7 +99,7 @@ set_output_delay $output_delay_value -clock $clocks $clk_core_output_ports
 # Bidirectional pads
 set clk_core_inout_ports [get_ports { 
 <%
-power_pads = [ pad for pad in xheep.get_padring().pad_list if any(isinstance(pin, PinPower) for pin in pad.pins) ] 
+power_pads = [ pad for pad in xheep.get_padring().pad_list if any(is_a(pin, "PinPower") for pin in pad.pins) ] 
 %>
 % for pad in [pad for pad in xheep.get_padring().pad_list if pad not in power_pads]:
   <%

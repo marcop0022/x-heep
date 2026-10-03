@@ -1,7 +1,3 @@
-<%
-    if impl_target != "asic_ihp":
-        return STOP_RENDERING
-%>
 <%!
     from pads.pin import Input, Output, Inout
     from pads.pad import Pad
