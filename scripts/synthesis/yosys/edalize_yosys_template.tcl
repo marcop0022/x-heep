@@ -61,6 +61,9 @@ yosys chformal -remove
 file delete -force report
 file mkdir report
 
+# The elaborated design (before any optimization)
+yosys tee -o report/check_design_elaborate.rpt check
+
 proc sdc_clocks {sdc} {
 	set i [interp create]
 	$i eval {
@@ -119,12 +122,12 @@ if {$abc_delay eq ""} {
 	puts $rpt "\nABC delay target: $abc_delay ps"
 }
 close $rpt
-
+# Next to the netlist, for a later STA
 file copy -force $sdc_file report/constraints.sdc
 
 set abc_args [list -liberty $stdcell_lib]
 if {$abc_delay ne ""} { lappend abc_args -D $abc_delay }
-
+# Input driver and output load of ABC's buffering and gate sizing (tech file)
 if {[info exists TECH_ABC_DRIVING_CELL] && [info exists TECH_ABC_LOAD_FF]} {
 	set constr [open abc.constr w]
 	puts $constr "set_driving_cell $TECH_ABC_DRIVING_CELL"
@@ -133,11 +136,16 @@ if {[info exists TECH_ABC_DRIVING_CELL] && [info exists TECH_ABC_LOAD_FF]} {
 	lappend abc_args -constr [file normalize abc.constr]
 }
 
-yosys synth -top $synth_top
-yosys tee -o report/check_design.rpt check
+yosys synth -top $synth_top -run :fine
+# Word-level operators (adders, multipliers, comparators, ...) before their
+# mapping to gates, as Design Compiler's report_resources
+yosys tee -o report/resources.rpt stat -width
+yosys synth -top $synth_top -run fine:
 yosys dfflibmap -liberty $stdcell_lib
 yosys abc {*}$abc_args
 yosys clean
+# The mapped design
+yosys tee -o report/check_design_compile.rpt check
 
 set stat_libs {}
 foreach lib [concat [list $stdcell_lib] [tech_yosys_macro_libs]] { lappend stat_libs -liberty $lib }

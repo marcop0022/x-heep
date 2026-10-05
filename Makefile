@@ -350,6 +350,7 @@ pdk:
 	@test -d "$(PDK_XHEEP)/$(PDK)/libs.ref" || ciel enable --pdk-root "$(PDK_XHEEP)" --pdk-family $(PDK) $(PDK_VERSION)
 
 ## Yosys synthesis for IHP-SG13G2. Log, netlist and reports in implementation/synthesis/last_output
+## then the OpenSTA reports (timing, power, ...) if STA is installed
 ## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
 ## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
 asic-yosys: pdk
@@ -360,9 +361,18 @@ asic-yosys: pdk
 	test -f $$out/netlist.v || { echo "ERROR: synthesis failed, see $$out/yosys.log"; exit 1; }; \
 	! grep -nE '^\s*assert\s*\(' $$out/netlist.v | head -5 | grep . || { echo "ERROR: netlist contains assert statements"; exit 1; }; \
 	cp $$out/netlist.v $$out/netlist_sim.v && echo ihp-sg13g2 > $$out/asic_tech && \
-	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $$out/netlist_sim.v && \
+	echo "$(ASIC_CLK_PERIOD)" > $$out/asic_clk_period && \
+	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $$out/netlist_sim.v || exit 1; \
+	sh scripts/synthesis/opensta/run_sta.sh $$out; sta_rc=$$?; \
 	rm -rf $(SYNTH_DIR)/last_output && cp -R $$out $(SYNTH_DIR)/last_output && \
-	echo "Synthesis log, netlist and reports in $$out (copied to $(SYNTH_DIR)/last_output)"
+	echo "Synthesis log, netlist and reports in $$out (copied to $(SYNTH_DIR)/last_output)"; \
+	exit $$sta_rc
+
+## OpenSTA reports (timing, power, ...) of the latest `make asic-yosys` netlist, in
+## implementation/synthesis/last_output (e.g. after installing OpenSTA)
+asic-sta:
+	@test -f $(SYNTH_DIR)/last_output/netlist.v || { echo "ERROR: no netlist, run 'make asic-yosys' first"; exit 1; }
+	@sh scripts/synthesis/opensta/run_sta.sh $(SYNTH_DIR)/last_output
 
 ## Prints what the ASIC flows find in the design kit of TECH, and what is missing (needs tclsh)
 ## @param TECH=[ihp-sg13g2(default)]

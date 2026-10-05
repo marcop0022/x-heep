@@ -12,6 +12,7 @@
 #   TECH_SIM_VLOG_FLAGS          vlog flags for the simulation models
 #   TECH_ABC_DRIVING_CELL        cell ABC assumes drives the inputs
 #   TECH_ABC_LOAD_FF             load ABC assumes on the outputs, in fF
+#   TECH_CLOCK_GATE_CELLS        glob patterns of the integrated clock-gating cells (STA reports)
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #   tech_yosys_macro_libs        Liberty of the hard cells the RTL instantiates (SRAM, IO)
 #   tech_sim_models              functional Verilog models (gate-level sim)
@@ -28,6 +29,7 @@ set TECH_SIM_VLOG_FLAGS {+define+FUNCTIONAL}
 
 set TECH_ABC_DRIVING_CELL sg13g2_buf_4
 set TECH_ABC_LOAD_FF 6.0
+set TECH_CLOCK_GATE_CELLS {sg13g2_lgcp_* sg13g2_slgcp_*}
 
 proc _ihp_sg13g2_ref {} {
   set root [asic_root PDK_XHEEP "IHP-SG13G2 PDK"]
