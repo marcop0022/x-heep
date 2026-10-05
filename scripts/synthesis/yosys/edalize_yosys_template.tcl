@@ -61,10 +61,82 @@ yosys chformal -remove
 file delete -force report
 file mkdir report
 
+proc sdc_clocks {sdc} {
+	set i [interp create]
+	$i eval {
+		set ::clocks {}
+		proc create_clock {args} {
+			set name ""
+			set period ""
+			set targets {}
+			for {set k 0} {$k < [llength $args]} {incr k} {
+				switch -- [lindex $args $k] {
+					-name     { set name [lindex $args [incr k]] }
+					-period   { set period [lindex $args [incr k]] }
+					-waveform -
+					-comment  { incr k }
+					-add      {}
+					default   { lappend targets {*}[lindex $args $k] }
+				}
+			}
+			if {$name eq ""} { set name [lindex $targets 0] }
+			lappend ::clocks [list $name $period $targets]
+		}
+		foreach cmd {get_ports get_pins get_nets get_clocks} {
+			proc $cmd {args} { return [lindex $args end] }
+		}
+		proc unknown {args} { return "" }
+	}
+	if {[catch {$i eval [list source $sdc]} err]} {
+		interp delete $i
+		error "\[x-heep] cannot read $sdc: $err"
+	}
+	set clocks [$i eval {set ::clocks}]
+	interp delete $i
+	return $clocks
+}
+
+set sdc_file [file normalize ../../../scripts/synthesis/yosys/constraints.sdc]
+puts "\[x-heep] clock constraints: $sdc_file"
+set abc_delay ""
+set rpt [open report/clocks.rpt w]
+puts $rpt "SDC: $sdc_file\n"
+puts $rpt [format "%-20s %-12s %s" Clock "Period (ns)" Sources]
+foreach clk [sdc_clocks $sdc_file] {
+	lassign $clk clk_name clk_period clk_targets
+	if {![string is double -strict $clk_period] || $clk_period <= 0} {
+		error "\[x-heep] clock $clk_name: invalid period '$clk_period' in $sdc_file"
+	}
+	puts $rpt [format "%-20s %-12s %s" $clk_name $clk_period $clk_targets]
+	puts "\[x-heep] clock $clk_name: period $clk_period ns on $clk_targets"
+	set clk_ps [expr {round($clk_period * 1000)}]
+	if {$abc_delay eq "" || $clk_ps < $abc_delay} { set abc_delay $clk_ps }
+}
+if {$abc_delay eq ""} {
+	puts $rpt "\nNo clock: ABC maps without delay target."
+	puts "\[x-heep] WARNING: no create_clock in $sdc_file, ABC maps without delay target"
+} else {
+	puts $rpt "\nABC delay target: $abc_delay ps"
+}
+close $rpt
+
+file copy -force $sdc_file report/constraints.sdc
+
+set abc_args [list -liberty $stdcell_lib]
+if {$abc_delay ne ""} { lappend abc_args -D $abc_delay }
+
+if {[info exists TECH_ABC_DRIVING_CELL] && [info exists TECH_ABC_LOAD_FF]} {
+	set constr [open abc.constr w]
+	puts $constr "set_driving_cell $TECH_ABC_DRIVING_CELL"
+	puts $constr "set_load $TECH_ABC_LOAD_FF"
+	close $constr
+	lappend abc_args -constr [file normalize abc.constr]
+}
+
 yosys synth -top $synth_top
 yosys tee -o report/check_design.rpt check
 yosys dfflibmap -liberty $stdcell_lib
-yosys abc -liberty $stdcell_lib
+yosys abc {*}$abc_args
 yosys clean
 
 set stat_libs {}

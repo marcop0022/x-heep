@@ -351,6 +351,7 @@ pdk:
 
 ## Yosys synthesis for IHP-SG13G2. Log, netlist and reports in implementation/synthesis/last_output
 ## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
+## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
 asic-yosys: pdk
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
 	@work=$$(ls -d $(BUILD_DIR)/openhwgroup.org_systems_core-v-mini-mcu_*/asic_yosys_synthesis-yosys | sort -V | head -n 1); \

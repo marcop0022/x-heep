@@ -47,6 +47,9 @@ switch -- $what {
       }
     }
     puts "\nsim: vlog flags: $TECH_SIM_VLOG_FLAGS +nospecify +notimingcheck"
+    if {[info exists TECH_ABC_DRIVING_CELL] && [info exists TECH_ABC_LOAD_FF]} {
+      puts "yosys: ABC driving cell $TECH_ABC_DRIVING_CELL, output load $TECH_ABC_LOAD_FF fF"
+    }
     exit [expr {$ok ? 0 : 1}]
   }
   default {

@@ -10,6 +10,8 @@
 #
 #   TECH_NAME, TECH_ROOT_VAR     technology name, env variable of its root
 #   TECH_SIM_VLOG_FLAGS          vlog flags for the simulation models
+#   TECH_ABC_DRIVING_CELL        cell ABC assumes drives the inputs
+#   TECH_ABC_LOAD_FF             load ABC assumes on the outputs, in fF
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #   tech_yosys_macro_libs        Liberty of the hard cells the RTL instantiates (SRAM, IO)
 #   tech_sim_models              functional Verilog models (gate-level sim)
@@ -23,6 +25,9 @@ set TECH_ROOT_VAR PDK_XHEEP
 # FUNCTIONAL: wire the SRAM macros' behavioral core to their undelayed pins
 # (otherwise to A_*_DELAY nets driven only by specify-block timing checks).
 set TECH_SIM_VLOG_FLAGS {+define+FUNCTIONAL}
+
+set TECH_ABC_DRIVING_CELL sg13g2_buf_4
+set TECH_ABC_LOAD_FF 6.0
 
 proc _ihp_sg13g2_ref {} {
   set root [asic_root PDK_XHEEP "IHP-SG13G2 PDK"]
