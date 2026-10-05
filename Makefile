@@ -53,14 +53,14 @@ VERILATOR_DIR     = $(FUSESOC_BUILD_DIR)/sim-verilator
 QUESTASIM_DIR     = $(FUSESOC_BUILD_DIR)/sim-modelsim
 QUESTASIM_POSTSYNTH_DIR = $(FUSESOC_BUILD_DIR)/sim_postsynthesis-modelsim
 SYNTH_DIR            = implementation/synthesis
-ASIC_YOSYS_NETLIST   = $(SYNTH_DIR)/last_output/netlist.v
-POSTSYNTH_DIR        = implementation/postsynth
-POSTSYNTH_NETLIST    = $(POSTSYNTH_DIR)/x_heep_system_netlist.v
+# Post-synthesis simulations use the latest `make asic-yosys` outputs
+POSTSYNTH_DIR        = $(SYNTH_DIR)/last_output
+POSTSYNTH_NETLIST    = $(POSTSYNTH_DIR)/netlist_sim.v
 POSTSYNTH_MAX_CYCLES ?= 5000000
-POSTSYNTH_VERILATOR_CELLS = $(POSTSYNTH_DIR)/x_heep_system_cells_verilator.sv
+POSTSYNTH_VERILATOR_CELLS = $(POSTSYNTH_DIR)/cells_verilator.sv
 VERILATOR_POSTSYNTH_DIR   = $(FUSESOC_BUILD_DIR)/sim_postsynthesis_verilator-verilator
 # Technology of `make asic-tech-check`
-TECH ?= ihp130
+TECH ?= ihp-sg13g2
 # PDK root shared by the ASIC flows (ciel-style: contains e.g. ihp-sg13g2/). Gitignored, fetched by `make pdk`.
 PDK_XHEEP   ?= $(mkfile_path)/hw/asic/pdk
 override PDK_XHEEP := $(abspath $(PDK_XHEEP))
@@ -357,27 +357,19 @@ asic-yosys: pdk
 	out=$(SYNTH_DIR)/output_$$(date +%Y_%m_%d_%H-%M-%S); mkdir -p $$out; \
 	cp -R $$work/report/. $$work/yosys.log $$out/; \
 	test -f $$out/netlist.v || { echo "ERROR: synthesis failed, see $$out/yosys.log"; exit 1; }; \
+	! grep -nE '^\s*assert\s*\(' $$out/netlist.v | head -5 | grep . || { echo "ERROR: netlist contains assert statements"; exit 1; }; \
+	cp $$out/netlist.v $$out/netlist_sim.v && echo ihp-sg13g2 > $$out/asic_tech && \
+	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $$out/netlist_sim.v && \
 	rm -rf $(SYNTH_DIR)/last_output && cp -R $$out $(SYNTH_DIR)/last_output && \
 	echo "Synthesis log, netlist and reports in $$out (copied to $(SYNTH_DIR)/last_output)"
 
 ## Prints what the ASIC flows find in the design kit of TECH, and what is missing (needs tclsh)
-## @param TECH=[ihp130(default)]
+## @param TECH=[ihp-sg13g2(default)]
 asic-tech-check:
 	tclsh scripts/asic/tech/query.tcl $(TECH) check
 
-## Stages the `make asic_yosys` netlist for the post-synthesis simulations, in implementation/postsynth/
-asic_yosys_stage:
-	@test -f "$(ASIC_YOSYS_NETLIST)" || (echo "ERROR: $(ASIC_YOSYS_NETLIST) not found - run 'make asic_yosys' first" && exit 1)
-	mkdir -p $(POSTSYNTH_DIR)
-	cp $(ASIC_YOSYS_NETLIST) $(POSTSYNTH_NETLIST)
-	echo ihp130 > $(POSTSYNTH_DIR)/asic_tech
-	@! grep -nE '^\s*assert\s*\(' $(POSTSYNTH_NETLIST) | head -5 | grep . || (echo "ERROR: netlist still contains assert statements - re-run 'make asic_yosys'" && exit 1)
-	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $(POSTSYNTH_NETLIST)
-	$(PYTHON) scripts/sim/modelsim/generate_postsyn_sim_shim.py
-	@echo "Staged the asic_yosys netlist in $(POSTSYNTH_DIR)"
-
 ## @section Post-synthesis Simulation
-## Questasim post-synthesis (gate-level) simulation build of the staged netlist.
+## Questasim post-synthesis (gate-level) simulation build of the `make asic-yosys` netlist.
 questasim-build-postsynth:
 	$(if $(FUSESOC_BUILD_DIR),rm -rf $(QUESTASIM_POSTSYNTH_DIR))
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth.log
@@ -399,8 +391,9 @@ questasim-run-postsynth-app: app
 questasim-run-postsynth-opt:
 	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
 
-## Verilator post-synthesis (gate-level) simulation build of the `make asic_yosys` netlist.
-verilator-build-postsynth: asic_yosys_stage | .check-verilator
+## Verilator post-synthesis (gate-level) simulation build of the `make asic-yosys` netlist.
+verilator-build-postsynth: | .check-verilator
+	@test -f $(POSTSYNTH_NETLIST) || { echo "ERROR: $(POSTSYNTH_NETLIST) not found - run 'make asic-yosys' first"; exit 1; }
 	tclsh scripts/sim/verilator/gen_postsyn_cells.tcl $$(cat $(POSTSYNTH_DIR)/asic_tech) $(POSTSYNTH_NETLIST) $(POSTSYNTH_VERILATOR_CELLS)
 	$(if $(FUSESOC_BUILD_DIR),rm -rf $(VERILATOR_POSTSYNTH_DIR))
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth_verilator.log
