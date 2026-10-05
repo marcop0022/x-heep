@@ -16,11 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-<%!
-    from memory_ss.memory_ss import MemorySS
-    from memory_ss.ram_bank import Bank
-%>
-
 source $::env(SCRIPTS_DIR)/openroad/common/io.tcl
 source $::env(SCRIPTS_DIR)/openroad/common/set_global_connections.tcl
 set_global_connections
@@ -187,32 +182,24 @@ if { $::env(PDN_CORE_RING) == 1 } {
     }
 }
 
-define_pdn_grid \ 
-    -macro \ 
-    -default \ 
-    -name macro \ 
-    -starts_with POWER \ 
+define_pdn_grid \
+    -macro \
+    -default \
+    -name macro \
+    -starts_with POWER \
     -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
-add_pdn_connect \ 
-    -grid macro \ 
+add_pdn_connect \
+    -grid macro \
     -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
 
 # SRAM grid
-define_pdn_grid \ 
-    -macro \ 
-    -instances "\ 
-<% banks = list(xheep.memory_ss().iter_ram_banks()) %>\
-% for i in range(len(banks)):
-% if i != len(banks)-1:
-core_v_mini_mcu_i.memory_subsystem_i.ram${banks[i].map_idx()-1}_i.genblk2.sram_inst \ 
-% else:
-core_v_mini_mcu_i.memory_subsystem_i.ram${banks[i].map_idx()-1}_i.genblk2.sram_inst" \ 
-% endif
-% endfor
-    -name fabric_sram \ 
+define_pdn_grid \
+    -macro \
+    -instances "core_v_mini_mcu_i.memory_subsystem_i.*sram_inst" \
+    -name fabric_sram \
     -starts_with POWER
 
-add_pdn_connect \ 
-    -grid fabric_sram \ 
+add_pdn_connect \
+    -grid fabric_sram \
     -layers "Metal4 TopMetal1"

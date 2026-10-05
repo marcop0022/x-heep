@@ -8,7 +8,7 @@
 
 # SystemVerilog support
 USE_SLANG: True
-SLANG_ARGUMENTS: ['--allow-use-before-declare', '--keep-hierarchy']
+SLANG_ARGUMENTS: ['--allow-use-before-declare', '--keep-hierarchy', '--ignore-assertions']
 
 # Bondpad
 # WARNING: You need to put the bondpads directly in the build folder
@@ -31,10 +31,9 @@ GND_NETS:
 - VSS
 # Connect SRAMS to PDN
 PDN_MACRO_CONNECTIONS:
-% for bank in xheep.memory_ss().iter_ram_banks():
-- "core_v_mini_mcu_i.memory_subsystem_i.ram${bank.map_idx()-1}_i.genblk2.sram_inst VDD VSS VDDARRAY! VSS!"
-- "core_v_mini_mcu_i.memory_subsystem_i.ram${bank.map_idx()-1}_i.genblk2.sram_inst VDD VSS VDD! VSS!"
-% endfor
+# Regex on the instance names of all the SRAM macros (see sram_wrapper_ihp_sg13g2.sv)
+- "core_v_mini_mcu_i.memory_subsystem_i.*sram_inst VDD VSS VDDARRAY! VSS!"
+- "core_v_mini_mcu_i.memory_subsystem_i.*sram_inst VDD VSS VDD! VSS!"
 
 OPENROAD_THREADS: 32
 
@@ -189,15 +188,27 @@ MACROS:
         - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x32_c2_bm_bist_fast_1p32V_m55C.lib
       "*_slow_1p08V_125C":
         - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x32_c2_bm_bist_slow_1p08V_125C.lib
-  RM_IHPSG13_1P_8192x32_c4:
+  RM_IHPSG13_1P_1024x64_c2_bm_bist:
     gds:
-      - pdk_dir::libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_8192x32_c4.gds
+      - pdk_dir::libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_1024x64_c2_bm_bist.gds
     lef:
-      - pdk_dir::libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_8192x32_c4.lef
+      - pdk_dir::libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x64_c2_bm_bist.lef
     lib:
       "*_typ_1p20V_25C":
-        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_8192x32_c4_typ_1p20V_25C.lib
+        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_typ_1p20V_25C.lib
       "*_fast_1p32V_m40C":
-        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_8192x32_c4_fast_1p32V_m55C.lib
+        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_fast_1p32V_m55C.lib
       "*_slow_1p08V_125C":
-        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_8192x32_c4_slow_1p08V_125C.lib
+        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_slow_1p08V_125C.lib
+  RM_IHPSG13_1P_2048x64_c2_bm_bist:
+    gds:
+      - pdk_dir::libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_2048x64_c2_bm_bist.gds
+    lef:
+      - pdk_dir::libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_2048x64_c2_bm_bist.lef
+    lib:
+      "*_typ_1p20V_25C":
+        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_typ_1p20V_25C.lib
+      "*_fast_1p32V_m40C":
+        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_fast_1p32V_m55C.lib
+      "*_slow_1p08V_125C":
+        - pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_slow_1p08V_125C.lib
