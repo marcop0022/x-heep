@@ -8,9 +8,9 @@ import re
 import sys
 from pathlib import Path
 
-NETLIST = Path(sys.argv[1] if len(sys.argv) > 1 else "implementation/postsynth/x_heep_system_netlist.v")
+NETLIST = Path(sys.argv[1] if len(sys.argv) > 1 else "implementation/synthesis/last_output/netlist_sim.v")
 PREFIX = "ps_"
-TOP = "x_heep_system_synth_top"
+TOP = "x_heep_system"
 PDK_RE = re.compile(r"^\\?(sg13g2_|RM_IHPSG13)")
 
 IDENT = r"(\\\S+|[A-Za-z_][\w$]*)"

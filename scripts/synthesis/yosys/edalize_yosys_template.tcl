@@ -10,7 +10,7 @@ echo on
 
 source edalize_yosys_procs.tcl
 
-set ASIC_TECH ihp130
+set ASIC_TECH ihp-sg13g2
 
 if {[file exists asic_tech.tcl]} { source asic_tech.tcl }
 source ../../../scripts/asic/tech/$ASIC_TECH.tcl
@@ -20,28 +20,10 @@ if {[asic_env $TECH_ROOT_VAR] eq ""} {
 	error "\[x-heep] \$$TECH_ROOT_VAR is not set: the $ASIC_TECH flow needs its design kit (see scripts/asic/tech/$ASIC_TECH.tcl)."
 }
 
-set synth_top x_heep_system_synth_top
+set synth_top x_heep_system
 
-read_slang --top $synth_top \
-	--define-macro SYNTHESIS=true \
-	--define-macro REMOVE_OBI_FIFO \
-	--define-macro ASSERTS_OFF \
-	--define-macro COMMON_CELLS_ASSERTS_OFF \
-	--compat-mode \
-	--keep-hierarchy \
-	--allow-use-before-declare \
-	--ignore-unknown-modules \
-	--error-limit=100 \
-	-Wno-implicit-port-type-mismatch \
-	-Wno-duplicate-definition \
-	-Wno-implicit-conv \
-	-Wno-redef-macro \
-	-Wno-unconnected-port \
-	-f "files.flist" \
-	x_heep_system_synth_top.sv
-
-yosys chformal -remove
-
+# PDK cells (std cells, IO pads, SRAM macros) as blackboxes, read before the
+# RTL so that read_slang resolves the cells the wrappers instantiate
 set stdcell_libs [tech_stdcell_libs]
 set stdcell_lib [lindex $stdcell_libs 0]
 if {[llength $stdcell_libs] > 1} {
@@ -50,11 +32,29 @@ if {[llength $stdcell_libs] > 1} {
 puts "\[x-heep] std-cell Liberty: $stdcell_lib"
 yosys read_liberty -lib -overwrite $stdcell_lib
 
-# Hard cells instantiated by the RTL (blackbox, timing only).
 foreach macro_lib [tech_yosys_macro_libs] {
 	puts "\[x-heep] hard-cell Liberty: $macro_lib"
 	yosys read_liberty -lib -overwrite $macro_lib
 }
+
+read_slang --top $synth_top \
+	--define-macro SYNTHESIS=true \
+	--define-macro XHEEP_STANDALONE_SYNTHESIS \
+	--define-macro REMOVE_OBI_FIFO \
+	--define-macro ASSERTS_OFF \
+	--define-macro COMMON_CELLS_ASSERTS_OFF \
+	--compat-mode \
+	--keep-hierarchy \
+	--allow-use-before-declare \
+	--error-limit=100 \
+	-Wno-implicit-port-type-mismatch \
+	-Wno-duplicate-definition \
+	-Wno-implicit-conv \
+	-Wno-redef-macro \
+	-Wno-unconnected-port \
+	-f "files.flist"
+
+yosys chformal -remove
 
 # Reports and netlist go to report/; `make asic-yosys` copies them, with the log,
 # to implementation/synthesis/ (as the design_compiler flow does)

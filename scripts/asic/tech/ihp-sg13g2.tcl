@@ -2,11 +2,11 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# IHP-SG13G2 (ihp130) technology description for the X-HEEP ASIC flows.
+# IHP-SG13G2 technology description for the X-HEEP ASIC flows.
 #
 # Input: $PDK_XHEEP = IHP Open PDK root (the directory containing libs.ref/, or
 # its parent). Each resource can be overridden with the variable named in
-# its asic_find call below (e.g. IHP130_STDCELL_LIB).
+# its asic_find call below (e.g. IHP_SG13G2_STDCELL_LIB).
 #
 #   TECH_NAME, TECH_ROOT_VAR     technology name, env variable of its root
 #   TECH_SIM_VLOG_FLAGS          vlog flags for the simulation models
@@ -17,14 +17,14 @@
 
 source [file join [file dirname [info script]] common.tcl]
 
-set TECH_NAME ihp130
+set TECH_NAME ihp-sg13g2
 set TECH_ROOT_VAR PDK_XHEEP
 
 # FUNCTIONAL: wire the SRAM macros' behavioral core to their undelayed pins
 # (otherwise to A_*_DELAY nets driven only by specify-block timing checks).
 set TECH_SIM_VLOG_FLAGS {+define+FUNCTIONAL}
 
-proc _ihp130_ref {} {
+proc _ihp_sg13g2_ref {} {
   set root [asic_root PDK_XHEEP "IHP-SG13G2 PDK"]
   foreach cand [list $root/libs.ref $root/ihp-sg13g2/libs.ref] {
     if {[file isdirectory $cand]} { return $cand }
@@ -33,35 +33,35 @@ proc _ihp130_ref {} {
 }
 
 proc tech_stdcell_libs {} {
-  set ref [_ihp130_ref]
-  return [asic_find "IHP std-cell Liberty" IHP130_STDCELL_LIB \
+  set ref [_ihp_sg13g2_ref]
+  return [asic_find "IHP std-cell Liberty" IHP_SG13G2_STDCELL_LIB \
     [list $ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib]]
 }
 
-proc _ihp130_sram_libs {} {
-  set ref [_ihp130_ref]
-  return [asic_find "IHP SRAM Liberty" IHP130_SRAM_LIBS \
+proc _ihp_sg13g2_sram_libs {} {
+  set ref [_ihp_sg13g2_ref]
+  return [asic_find "IHP SRAM Liberty" IHP_SG13G2_SRAM_LIBS \
     [list "$ref/sg13g2_sram/lib/*_typ_1p20V_25C.lib"]]
 }
 
-proc _ihp130_io_libs {} {
-  set ref [_ihp130_ref]
-  return [asic_find "IHP IO Liberty" IHP130_IO_LIB \
+proc _ihp_sg13g2_io_libs {} {
+  set ref [_ihp_sg13g2_ref]
+  return [asic_find "IHP IO Liberty" IHP_SG13G2_IO_LIB \
     [list $ref/sg13g2_io/lib/sg13g2_io_typ_1p2V_3p3V_25C.lib]]
 }
 
-proc tech_yosys_macro_libs {} { return [concat [_ihp130_sram_libs] [_ihp130_io_libs]] }
+proc tech_yosys_macro_libs {} { return [concat [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]] }
 
 proc tech_sim_models {} {
-  set ref [_ihp130_ref]
+  set ref [_ihp_sg13g2_ref]
   return [concat \
-    [asic_find "IHP std-cell Verilog models" IHP130_STDCELL_V [list "$ref/sg13g2_stdcell/verilog/*.v"]] \
+    [asic_find "IHP std-cell Verilog models" IHP_SG13G2_STDCELL_V [list "$ref/sg13g2_stdcell/verilog/*.v"]] \
     [tech_sim_macro_models]]
 }
 
 proc tech_sim_macro_models {} {
-  set ref [_ihp130_ref]
+  set ref [_ihp_sg13g2_ref]
   return [concat \
-    [asic_find "IHP IO Verilog models" IHP130_IO_V [list "$ref/sg13g2_io/verilog/*.v"]] \
-    [asic_find "IHP SRAM Verilog models" IHP130_SRAM_V [list "$ref/sg13g2_sram/verilog/*.v"]]]
+    [asic_find "IHP IO Verilog models" IHP_SG13G2_IO_V [list "$ref/sg13g2_io/verilog/*.v"]] \
+    [asic_find "IHP SRAM Verilog models" IHP_SG13G2_SRAM_V [list "$ref/sg13g2_sram/verilog/*.v"]]]
 }
