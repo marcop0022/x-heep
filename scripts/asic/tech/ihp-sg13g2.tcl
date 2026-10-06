@@ -88,6 +88,10 @@ proc tech_yosys_macro_libs {} { return [concat [_ihp_sg13g2_sram_libs] [_ihp_sg1
 
 # Design Compiler: the PDK ships Liberty only, converted once to .db by
 # `make asic-tech-db TECH=ihp-sg13g2` (into build/tech_db/ihp-sg13g2).
+# Library Compiler rejects the analog pad of the slow IO Liberty (pad pin and
+# voltage groups not defined: LBDB-206/235); X-HEEP does not use it, so it is
+# left out of the .db (scripts/asic/lib2db.tcl).
+set TECH_LIB2DB_DROP_CELLS {sg13g2_IOPadAnalog}
 proc tech_lib2db_libs {} {
   return [concat [tech_stdcell_libs] [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]]
 }
