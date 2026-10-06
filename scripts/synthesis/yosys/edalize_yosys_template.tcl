@@ -14,7 +14,7 @@ set ASIC_TECH ihp-sg13g2
 
 if {[file exists asic_tech.tcl]} { source asic_tech.tcl }
 source ../../../scripts/asic/tech/$ASIC_TECH.tcl
-puts "\[x-heep] target technology: $ASIC_TECH"
+puts "\[x-heep] target technology: $ASIC_TECH, library corner: [asic_corner]"
 
 if {[asic_env $TECH_ROOT_VAR] eq ""} {
 	error "\[x-heep] \$$TECH_ROOT_VAR is not set: the $ASIC_TECH flow needs its design kit (see scripts/asic/tech/$ASIC_TECH.tcl)."
@@ -141,6 +141,14 @@ yosys synth -top $synth_top -run :fine
 # mapping to gates, as Design Compiler's report_resources
 yosys tee -o report/resources.rpt stat -width
 yosys synth -top $synth_top -run fine:
+# Clock gating, as Design Compiler's -gate_clock: every set of at least 3
+# flip-flops sharing clock and enable gets the technology's integrated
+# clock-gating cell (the same DC inserts), test enable tied low
+if {[info exists TECH_ICG_CELL]} {
+	lassign $TECH_ICG_PINS icg_en icg_clk icg_gclk
+	puts "\[x-heep] clock gating: $TECH_ICG_CELL, at least 3 flip-flops"
+	yosys clockgate -pos $TECH_ICG_CELL $icg_en:$icg_clk:$icg_gclk -tie_lo $TECH_ICG_TEST_PIN -min_net_size 3
+}
 yosys dfflibmap -liberty $stdcell_lib
 yosys abc {*}$abc_args
 yosys clean

@@ -11,6 +11,16 @@ proc asic_env {name} {
   return ""
 }
 
+# Library corner of every flow (std cells, SRAMs, IO pads), the same for all
+# technologies so that they compare: $ASIC_CORNER = worst (default; slow
+# process, low voltage, high temperature) or typ.
+proc asic_corner {} {
+  set c [asic_env ASIC_CORNER]
+  if {$c eq ""} { set c worst }
+  if {$c ni {worst typ}} { error "\[asic] \$ASIC_CORNER=$c: expected worst or typ." }
+  return $c
+}
+
 # Design-kit root taken from environment variable $var; errors if unset.
 proc asic_root {var what} {
   set root [asic_env $var]

@@ -61,6 +61,8 @@ POSTSYNTH_VERILATOR_CELLS = $(POSTSYNTH_DIR)/cells_verilator.sv
 VERILATOR_POSTSYNTH_DIR   = $(FUSESOC_BUILD_DIR)/sim_postsynthesis_verilator-verilator
 # Technology of the ASIC flows (asic-yosys, asic-dc, asic-tech-check, asic-tech-db)
 TECH ?= ihp-sg13g2
+# Library corner of all the ASIC flows (scripts/asic/tech/common.tcl): worst or typ
+ASIC_CORNER ?= worst
 ASIC_TECHS = ihp-sg13g2 tsmc65
 # fusesoc targets of the ASIC flows, per technology
 ASIC_YOSYS_TARGET_ihp-sg13g2 = asic_yosys_synthesis
@@ -364,6 +366,7 @@ pdk:
 ## if OpenSTA is installed. Log, netlist and reports in implementation/synthesis/output_yosys_<tech>_<date>,
 ## copied to implementation/synthesis/last_output (read by the post-synthesis simulations).
 ## @param TECH=[ihp-sg13g2(default),tsmc65] (tsmc65: design kit in $TSMC65)
+## @param ASIC_CORNER=[worst(default),typ] (library corner, the same for every tool)
 ## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
 ## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
 asic-yosys: $(ASIC_PDK_DEP)
@@ -373,11 +376,12 @@ asic-yosys: $(ASIC_PDK_DEP)
 	sh scripts/synthesis/save_output.sh yosys $(TECH) "$$work" "$$work/yosys.log" --sta
 
 ## Design Compiler synthesis for TECH (scripts/synthesis/dc: the polheepo DC flow, compile_ultra
-## -timing -gate_clock -retime; same constraints as asic-yosys).
+## -timing -gate_clock, aligned with asic-yosys: same libraries, corner, constraints, clock-gating cell).
 ## Log, netlist and DC reports in implementation/synthesis/output_dc_<tech>_<date>, copied to
 ## implementation/synthesis/last_output. OpenSTA on its netlist: `make asic-dc-sta`.
 ## Needs, once per technology, `make asic-tech-db TECH=<tech>`.
 ## @param TECH=[ihp-sg13g2(default),tsmc65] (tsmc65: design kit in $TSMC65)
+## @param ASIC_CORNER=[worst(default),typ] (library corner, the same for every tool)
 ## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
 asic-dc: $(ASIC_PDK_DEP)
 	$(call asic_check_tech)
@@ -401,6 +405,7 @@ asic-dc-sta:
 
 ## Prints what the ASIC flows find in the design kit of TECH, and what is missing (needs tclsh)
 ## @param TECH=[ihp-sg13g2(default),tsmc65]
+## @param ASIC_CORNER=[worst(default),typ]
 asic-tech-check:
 	$(call asic_check_tech)
 	tclsh scripts/asic/tech/query.tcl $(TECH) check
@@ -408,6 +413,7 @@ asic-tech-check:
 ## Converts the Liberty files Design Compiler needs into .db, in build/tech_db/TECH (needs lc_shell).
 ## Needed once for ihp-sg13g2, whose PDK ships Liberty only.
 ## @param TECH=[ihp-sg13g2(default),tsmc65]
+## @param ASIC_CORNER=[worst(default),typ]
 asic-tech-db: $(ASIC_PDK_DEP)
 	$(call asic_check_tech)
 	mkdir -p $(BUILD_DIR)/tech_db

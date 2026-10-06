@@ -13,8 +13,14 @@
 #   TECH_ABC_DRIVING_CELL        cell ABC assumes drives the inputs
 #   TECH_ABC_LOAD_FF             load ABC assumes on the outputs, in fF
 #   TECH_CLOCK_GATE_CELLS        glob patterns of the integrated clock-gating cells (STA reports)
-#   TECH_DC_ICG_CELL             integrated clock-gating cell inserted by Design Compiler
+#   TECH_ICG_CELL                integrated clock-gating cell that Yosys (clockgate)
+#                                and Design Compiler (-gate_clock) insert
+#   TECH_ICG_PINS                its enable, clock and gated-clock pins (Yosys clockgate)
+#   TECH_ICG_TEST_PIN            its test-enable pin, tied low (Yosys clockgate)
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
+#
+# The Liberty files are those of the corner [asic_corner] ($ASIC_CORNER =
+# worst: slow 1.08V 125C, default; typ: 1.2V 25C), the same for every flow.
 #   tech_yosys_macro_libs        Liberty of the hard cells the RTL instantiates (SRAM, IO)
 #   tech_sim_models              functional Verilog models (gate-level sim)
 #   tech_sim_macro_models        the same, IO pads and SRAM macros only
@@ -35,9 +41,11 @@ set TECH_SIM_VLOG_FLAGS {+define+FUNCTIONAL}
 set TECH_ABC_DRIVING_CELL sg13g2_buf_4
 set TECH_ABC_LOAD_FF 6.0
 set TECH_CLOCK_GATE_CELLS {sg13g2_lgcp_* sg13g2_slgcp_*}
-# Integrated clock-gating cell Design Compiler inserts (-gate_clock), the same
+# Integrated clock-gating cell inserted by Yosys and Design Compiler, the same
 # the clock-gate wrapper instantiates (hw/asic/ihp-sg13g2/rtl/prim_ihp_sg13g2_clk.sv)
-set TECH_DC_ICG_CELL sg13g2_slgcp_1
+set TECH_ICG_CELL sg13g2_slgcp_1
+set TECH_ICG_PINS {GATE CLK GCLK}
+set TECH_ICG_TEST_PIN SCE
 
 proc _ihp_sg13g2_ref {} {
   set root [asic_root PDK_XHEEP "IHP-SG13G2 PDK"]
@@ -47,22 +55,33 @@ proc _ihp_sg13g2_ref {} {
   error "\[asic] \$PDK_XHEEP=$root: no libs.ref/ directory under it."
 }
 
+# Liberty file-name suffixes of the corner: std cells/SRAMs, IO pads
+proc _ihp_sg13g2_corner {} {
+  if {[asic_corner] eq "worst"} {
+    return {slow_1p08V_125C slow_1p08V_3p0V_125C}
+  }
+  return {typ_1p20V_25C typ_1p2V_3p3V_25C}
+}
+
 proc tech_stdcell_libs {} {
   set ref [_ihp_sg13g2_ref]
-  return [asic_find "IHP std-cell Liberty" IHP_SG13G2_STDCELL_LIB \
-    [list $ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib]]
+  lassign [_ihp_sg13g2_corner] core
+  return [asic_find "IHP std-cell Liberty ($core)" IHP_SG13G2_STDCELL_LIB \
+    [list $ref/sg13g2_stdcell/lib/sg13g2_stdcell_$core.lib]]
 }
 
 proc _ihp_sg13g2_sram_libs {} {
   set ref [_ihp_sg13g2_ref]
-  return [asic_find "IHP SRAM Liberty" IHP_SG13G2_SRAM_LIBS \
-    [list "$ref/sg13g2_sram/lib/*_typ_1p20V_25C.lib"]]
+  lassign [_ihp_sg13g2_corner] core
+  return [asic_find "IHP SRAM Liberty ($core)" IHP_SG13G2_SRAM_LIBS \
+    [list "$ref/sg13g2_sram/lib/*_$core.lib"]]
 }
 
 proc _ihp_sg13g2_io_libs {} {
   set ref [_ihp_sg13g2_ref]
-  return [asic_find "IHP IO Liberty" IHP_SG13G2_IO_LIB \
-    [list $ref/sg13g2_io/lib/sg13g2_io_typ_1p2V_3p3V_25C.lib]]
+  lassign [_ihp_sg13g2_corner] core io
+  return [asic_find "IHP IO Liberty ($io)" IHP_SG13G2_IO_LIB \
+    [list $ref/sg13g2_io/lib/sg13g2_io_$io.lib]]
 }
 
 proc tech_yosys_macro_libs {} { return [concat [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]] }

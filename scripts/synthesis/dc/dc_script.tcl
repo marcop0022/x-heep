@@ -3,12 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Design Compiler synthesis of X-HEEP (`make asic-dc TECH=<tech>`, fusesoc
-# targets asic_dc_synthesis_<tech>), for every technology the same flow as
-# polheepo's TSMC65 DC script: compile_ultra -timing -gate_clock -retime with
-# the technology's integrated clock-gating cell, hierarchy kept, the same
-# checks and reports. Libraries from scripts/asic/tech/<tech>.tcl
-# (tech_dc_target_dbs, tech_dc_link_dbs), constraints from
-# scripts/synthesis/constraints.sdc (the same as the Yosys flow).
+# targets asic_dc_synthesis_<tech>), for every technology the flow of
+# polheepo's TSMC65 DC script (compile_ultra -timing -gate_clock, hierarchy
+# kept, the same checks and reports), aligned with the Yosys/OpenSTA flow so
+# that the four tool/technology combinations compare:
+#   - the same libraries and corner (scripts/asic/tech/<tech>.tcl,
+#     $ASIC_CORNER) and constraints (scripts/synthesis/constraints.sdc);
+#   - clock gating with the same integrated cell Yosys inserts (TECH_ICG_CELL,
+#     min. 3 registers); no retiming (-retime), which Yosys cannot match;
+#   - analysis as in OpenSTA: no wire-load model, primary-input activity
+#     0.1 toggles/cycle (static probability 0.5) for the vectorless power.
 #
 # Sourced by the tcl project file of the edalize `design_compiler` backend,
 # which defines SCRIPT_DIR (this directory), READ_SOURCES (the tcl that
@@ -23,14 +27,14 @@
 # build directory.
 #
 # Environment: ASIC_CLK_PERIOD (clk_i period [ns], default: the SDC's),
-# DC_CORES (default 16).
+# ASIC_CORNER (worst, default, or typ), DC_CORES (default 16).
 
 set dc_top x_heep_system_dc_top
 
 if {[catch {
   source asic_tech.tcl
   source [file join $SCRIPT_DIR .. .. asic tech $ASIC_TECH.tcl]
-  puts "\[x-heep] target technology: $ASIC_TECH"
+  puts "\[x-heep] target technology: $ASIC_TECH, library corner: [asic_corner]"
 
   set cores [asic_env DC_CORES]
   if {$cores eq ""} { set cores 16 }
@@ -70,11 +74,18 @@ if {[catch {
   set sdc_file [file normalize [file join $SCRIPT_DIR .. constraints.sdc]]
   puts "\[x-heep] constraints: $sdc_file"
   source $sdc_file
+
+  # As OpenSTA on the Yosys netlist (scripts/synthesis/opensta/sta_reports.tcl):
+  # no wire-load model, primary inputs toggling 0.1 times per clock cycle
+  set_app_var auto_wire_load_selection false
+  catch {remove_wire_load_model [current_design]}
+  set_app_var power_default_toggle_rate 0.1
+  set_app_var power_default_static_probability 0.5
   file copy -force $sdc_file ${REPORT_DIR}/constraints.sdc
 
   report_clocks -attributes -skew > ${REPORT_DIR}/clocks.rpt
 
-  set_clock_gating_style -minimum_bitwidth 3 -positive_edge_logic integrated:$TECH_DC_ICG_CELL -control_point before
+  set_clock_gating_style -minimum_bitwidth 3 -positive_edge_logic integrated:$TECH_ICG_CELL -control_point before
 
   check_design > ${REPORT_DIR}/check_design_elaborate.rpt
   check_timing > ${REPORT_DIR}/check_timing_elaborate.rpt
@@ -99,7 +110,7 @@ if {[catch {
   set_fix_multiple_port_nets -all -buffer_constants [get_designs *]
   set_app_var verilogout_no_tri true
 
-  compile_ultra -no_autoungroup -no_boundary_optimization -timing -gate_clock -retime
+  compile_ultra -no_autoungroup -no_boundary_optimization -timing -gate_clock
 
   check_design > ${REPORT_DIR}/check_design_compile.rpt
   check_timing > ${REPORT_DIR}/check_timing_compile.rpt
@@ -126,6 +137,8 @@ if {[catch {
   report_constraint > ${REPORT_DIR}/constraints.rpt
   report_clock_gating > ${REPORT_DIR}/clock_gating.rpt
   report_power > ${REPORT_DIR}/power.rpt
+  # To check that no wire-load model is in effect
+  report_wire_load > ${REPORT_DIR}/wire_load.rpt
   report_qor > ${REPORT_DIR}/qor.rpt
 
   # Netlist: the wrapper becomes `x_heep_system` and the RTL top

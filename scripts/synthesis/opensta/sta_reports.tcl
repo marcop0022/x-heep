@@ -7,7 +7,7 @@
 # Yosys cannot produce. Run by run_sta.sh.
 #
 # Input: $XHEEP_SYNTH_OUT, a synthesis output folder with netlist.v,
-# constraints.sdc, asic_tech (technology) and asic_clk_period ($ASIC_CLK_PERIOD
+# constraints.sdc, asic_tech (technology), asic_corner and asic_clk_period ($ASIC_CLK_PERIOD
 # of the synthesis, empty for the SDC default). Reports written into
 # $XHEEP_STA_REPORTS (default: the same folder):
 #   clocks.rpt                 clock properties and skew (after the Yosys section)
@@ -80,6 +80,12 @@ if {[file exists $out/asic_clk_period]} {
     unset -nocomplain ::env(ASIC_CLK_PERIOD)
   }
 }
+
+# The library corner of the synthesis (asic_corner, read by the tech file)
+if {[file exists $out/asic_corner]} {
+  set ::env(ASIC_CORNER) [xh_read $out/asic_corner]
+}
+puts "\[x-heep] library corner: [asic_corner]"
 
 # The libraries Yosys mapped onto (std cells) and the hard cells (SRAM, IO)
 read_liberty [lindex [tech_stdcell_libs] 0]

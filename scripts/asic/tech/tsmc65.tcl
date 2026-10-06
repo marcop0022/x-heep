@@ -6,19 +6,20 @@
 # Same interface as ihp-sg13g2.tcl (see there).
 #
 # Input: $TSMC65 = root of the TSMC65 design kit (not in this repository).
-# The resources are searched as in polheepo's DC flow (set_libs.tcl), worst
-# corner everywhere; on the PoliTo server: TSMC65=/software/dk/tsmc65_gigi
-# (the SRAMs are then found in /software/dk/tsmc65/memory/sram/generated):
+# On the PoliTo server: TSMC65=/software/dk/tsmc65_gigi (the SRAMs are then
+# found in /software/dk/tsmc65/memory/sram/generated). Libraries as in
+# polheepo's DC flow (set_libs.tcl), except that the std cells are the NLDM
+# view (as the IHP ones) for every tool; corner [asic_corner]
+# ($ASIC_CORNER = worst: wc / ss 1.08V 125C, default; typ: tc / tt 1.2V 25C):
 #   <Front_End>  = $TSMC65/Front_End, $TSMC65/digital/Front_End or $TSMC65/*/Front_End
-#     std cells  <Front_End>/timing_power_noise/CCS/tcbn65lplvt_*/tcbn65lplvtwc_ccs.{lib,db}
-#                (else NLDM/tcbn65lplvt_*/tcbn65lplvtwc.{lib,db})
+#     std cells  <Front_End>/timing_power_noise/NLDM/tcbn65lplvt_*/tcbn65lplvt{wc,tc}.{lib,db}
 #                <Front_End>/verilog/tcbn65lplvt_*/tcbn65lplvt.v
-#     IO pads    <Front_End>/timing_power_noise/NLDM/tphn65lpnv2od3_sl_*/*wcz.{lib,db}
-#                (else tpdn65lpnv2od3_*/tpdn65lpnv2od3wc*.{lib,db})
+#     IO pads    <Front_End>/timing_power_noise/NLDM/tphn65lpnv2od3_sl_*/*{wcz,tc}.{lib,db}
+#                (else tpdn65lpnv2od3_*)
 #                <Front_End>/verilog/tphn65lpnv2od3_sl_*/*.v (else tpdn65lpnv2od3_*)
 #   <SRAM>       = memory-compiler output: $TSMC65/memory/sram/generated,
 #                  $TSMC65/*/memory/sram/generated or <parent of $TSMC65>/tsmc65/memory/sram/generated
-#     SRAMs      Liberty *ss*1p08*125*.lib under <SRAM>, .db next to it or in <SRAM>/DB
+#     SRAMs      Liberty *{ss*1p08*125,tt*1p2*25}*.lib under <SRAM>, .db next to it or in <SRAM>/DB
 #                Verilog *ss1p08v125c.v (or any .v) under <SRAM>
 # Any of them can be forced with the variable named in its asic_find call
 # (TSMC65_FRONT_END, TSMC65_SRAM_DIR, TSMC65_STDCELL_LIB, TSMC65_IO_LIB,
@@ -38,8 +39,11 @@ set TECH_SIM_VLOG_FLAGS {+define+UNIT_DELAY=0 +define+no_warning}
 set TECH_ABC_DRIVING_CELL BUFFD4LVT
 set TECH_ABC_LOAD_FF 6.0
 set TECH_CLOCK_GATE_CELLS {CKLNQD* CKLHQD*}
-# Integrated clock-gating cell Design Compiler inserts (-gate_clock), as in polheepo
-set TECH_DC_ICG_CELL CKLNQD16LVT
+# Integrated clock-gating cell inserted by Yosys and Design Compiler, as in
+# polheepo (and in the clock-gate wrapper, hw/asic/tsmc65/rtl/prim_tsmc65_clk.sv)
+set TECH_ICG_CELL CKLNQD16LVT
+set TECH_ICG_PINS {E CP Q}
+set TECH_ICG_TEST_PIN TE
 
 proc _tsmc65_front_end {} {
   set root [asic_root TSMC65 "TSMC65 design kit"]
@@ -56,26 +60,31 @@ proc _tsmc65_sram_dir {} {
 
 proc tech_stdcell_libs {} {
   set fe [_tsmc65_front_end]
-  return [asic_find "TSMC65 LVT std-cell Liberty (worst corner)" TSMC65_STDCELL_LIB \
-    [list "$fe/timing_power_noise/CCS/tcbn65lplvt_*/tcbn65lplvtwc_ccs.lib" \
-          "$fe/timing_power_noise/NLDM/tcbn65lplvt_*/tcbn65lplvtwc.lib"]]
+  set c [expr {[asic_corner] eq "worst" ? "wc" : "tc"}]
+  return [asic_find "TSMC65 LVT std-cell Liberty (NLDM, $c)" TSMC65_STDCELL_LIB \
+    [list "$fe/timing_power_noise/NLDM/tcbn65lplvt_*/tcbn65lplvt$c.lib"]]
 }
 
 proc _tsmc65_io_libs {} {
   set fe [_tsmc65_front_end]
-  set libs [asic_find "TSMC65 IO pad Liberty (PDUW0204CDG, worst corner)" TSMC65_IO_LIB \
-    [list "$fe/timing_power_noise/NLDM/tphn65lpnv2od3_sl_*/*wcz.lib" \
-          "$fe/timing_power_noise/NLDM/tpdn65lpnv2od3_*/tpdn65lpnv2od3wc.lib" \
-          "$fe/timing_power_noise/NLDM/tpdn65lpnv2od3_*/tpdn65lpnv2od3wc*.lib"]]
+  if {[asic_corner] eq "worst"} {
+    set pats [list "$fe/timing_power_noise/NLDM/tphn65lpnv2od3_sl_*/*wcz.lib" \
+                   "$fe/timing_power_noise/NLDM/tpdn65lpnv2od3_*/tpdn65lpnv2od3wc.lib"]
+  } else {
+    set pats [list "$fe/timing_power_noise/NLDM/tphn65lpnv2od3_sl_*/*tc.lib" \
+                   "$fe/timing_power_noise/NLDM/tpdn65lpnv2od3_*/tpdn65lpnv2od3tc.lib"]
+  }
+  set libs [asic_find "TSMC65 IO pad Liberty (PDUW0204CDG, [asic_corner])" TSMC65_IO_LIB $pats]
   if {[asic_env TSMC65_IO_LIB] eq ""} { set libs [lrange $libs 0 0] }
   return $libs
 }
 
 proc _tsmc65_sram_libs {} {
   set d [_tsmc65_sram_dir]
-  return [asic_find "TSMC65 SRAM Liberty (ss 1.08V 125C)" TSMC65_SRAM_LIBS \
-    [list "$d/ts1n65lpll*/SYNOPSYS/*ss*1p08*125*.lib" "$d/ts1n65lpll*/NLDM/*ss*1p08*125*.lib" \
-          "$d/LIB/*ss*1p08*125*.lib" "$d/*/*ss*1p08*125*.lib"]]
+  set c [expr {[asic_corner] eq "worst" ? "ss*1p08*125" : "tt*1p2*25"}]
+  return [asic_find "TSMC65 SRAM Liberty ($c)" TSMC65_SRAM_LIBS \
+    [list "$d/ts1n65lpll*/SYNOPSYS/*$c*.lib" "$d/ts1n65lpll*/NLDM/*$c*.lib" \
+          "$d/LIB/*$c*.lib" "$d/*/*$c*.lib"]]
 }
 
 proc tech_yosys_macro_libs {} { return [concat [_tsmc65_sram_libs] [_tsmc65_io_libs]] }

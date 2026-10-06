@@ -32,7 +32,7 @@ switch -- $what {
   }
   check {
     set ok 1
-    puts "Technology $TECH_NAME (root: \$$TECH_ROOT_VAR = '[asic_env $TECH_ROOT_VAR]')"
+    puts "Technology $TECH_NAME, corner [asic_corner] (root: \$$TECH_ROOT_VAR = '[asic_env $TECH_ROOT_VAR]')"
     foreach {label cmd} {
       "yosys: std-cell Liberty"        tech_stdcell_libs
       "yosys: hard-cell Liberty"       tech_yosys_macro_libs
