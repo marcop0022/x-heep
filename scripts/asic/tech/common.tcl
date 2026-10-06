@@ -2,6 +2,9 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 
+# Repository root (this file is scripts/asic/tech/common.tcl).
+set ASIC_REPO_ROOT [file normalize [file join [file dirname [info script]] .. .. ..]]
+
 # Value of environment variable $name, or "" if unset.
 proc asic_env {name} {
   if {[info exists ::env($name)]} { return [string trim $::env($name)] }
@@ -42,4 +45,30 @@ proc asic_find {what override patterns {required 1}} {
     error "\[asic] no $what found. Tried:\n  [join $patterns "\n  "]\nSet \$$override to the file(s) explicitly."
   }
   return {}
+}
+
+# Design Compiler: the Synopsys .db of each Liberty file in $libs, looked for
+# (in order) next to it, in each of $dirs, and in the repository cache
+# build/tech_db/<tech> (filled by `make asic-tech-db TECH=<tech>`, which runs
+# lc_shell). Errors on a missing .db unless $required is 0 (then that library
+# is skipped).
+proc asic_dbs_of {tech libs {dirs {}} {required 1}} {
+  global ASIC_REPO_ROOT
+  set cache [file join $ASIC_REPO_ROOT build tech_db $tech]
+  set dbs {}
+  foreach lib $libs {
+    set stem [file rootname [file tail $lib]]
+    set cands [list [file rootname $lib].db]
+    foreach d [concat $dirs [list $cache]] { lappend cands [file join $d $stem.db] }
+    set found ""
+    foreach c $cands {
+      if {[file exists $c]} { set found [file normalize $c]; break }
+    }
+    if {$found ne ""} {
+      lappend dbs $found
+    } elseif {$required} {
+      error "\[asic] no .db for $lib (looked for: [join $cands {, }]). Convert it with `make asic-tech-db TECH=$tech` (runs lc_shell)."
+    }
+  }
+  return $dbs
 }

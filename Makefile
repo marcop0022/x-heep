@@ -59,8 +59,19 @@ POSTSYNTH_NETLIST    = $(POSTSYNTH_DIR)/netlist_sim.v
 POSTSYNTH_MAX_CYCLES ?= 5000000
 POSTSYNTH_VERILATOR_CELLS = $(POSTSYNTH_DIR)/cells_verilator.sv
 VERILATOR_POSTSYNTH_DIR   = $(FUSESOC_BUILD_DIR)/sim_postsynthesis_verilator-verilator
-# Technology of `make asic-tech-check`
+# Technology of the ASIC flows (asic-yosys, asic-dc, asic-tech-check, asic-tech-db)
 TECH ?= ihp-sg13g2
+ASIC_TECHS = ihp-sg13g2 tsmc65
+# fusesoc targets of the ASIC flows, per technology
+ASIC_YOSYS_TARGET_ihp-sg13g2 = asic_yosys_synthesis
+ASIC_YOSYS_TARGET_tsmc65     = asic_yosys_synthesis_tsmc65
+ASIC_DC_TARGET_ihp-sg13g2    = asic_dc_synthesis_ihp_sg13g2
+ASIC_DC_TARGET_tsmc65        = asic_dc_synthesis_tsmc65
+asic_check_tech = $(if $(filter $(TECH),$(ASIC_TECHS)),,$(error TECH=$(TECH) is not one of: $(ASIC_TECHS)))
+# fusesoc work directory of target $1, tool $2
+asic_work_dir = $$(ls -d $(BUILD_DIR)/openhwgroup.org_systems_core-v-mini-mcu_*/$1-$2 2>/dev/null | sort -V | head -n 1)
+# The IHP PDK is fetched by `make pdk`; the TSMC65 kit is given by $TSMC65
+ASIC_PDK_DEP = $(if $(filter ihp-sg13g2,$(TECH)),pdk)
 # PDK root shared by the ASIC flows (ciel-style: contains e.g. ihp-sg13g2/). Gitignored, fetched by `make pdk`.
 PDK_XHEEP   ?= $(mkfile_path)/hw/asic/pdk
 override PDK_XHEEP := $(abspath $(PDK_XHEEP))
@@ -349,38 +360,61 @@ asic:
 pdk:
 	@test -d "$(PDK_XHEEP)/$(PDK)/libs.ref" || ciel enable --pdk-root "$(PDK_XHEEP)" --pdk-family $(PDK) $(PDK_VERSION)
 
-## Yosys synthesis for IHP-SG13G2. Log, netlist and reports in implementation/synthesis/last_output
-## then the OpenSTA reports (timing, power, ...) if STA is installed
+## Yosys synthesis for TECH (default ihp-sg13g2), then the OpenSTA reports (timing, power, ...)
+## if OpenSTA is installed. Log, netlist and reports in implementation/synthesis/output_yosys_<tech>_<date>,
+## copied to implementation/synthesis/last_output (read by the post-synthesis simulations).
+## @param TECH=[ihp-sg13g2(default),tsmc65] (tsmc65: design kit in $TSMC65)
 ## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
 ## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
-asic-yosys: pdk
-	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --target=asic_yosys_synthesis openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
-	@work=$$(ls -d $(BUILD_DIR)/openhwgroup.org_systems_core-v-mini-mcu_*/asic_yosys_synthesis-yosys | sort -V | head -n 1); \
-	out=$(SYNTH_DIR)/output_$$(date +%Y_%m_%d_%H-%M-%S); mkdir -p $$out; \
-	cp -R $$work/report/. $$work/yosys.log $$out/; \
-	test -f $$out/netlist.v || { echo "ERROR: synthesis failed, see $$out/yosys.log"; exit 1; }; \
-	! grep -nE '^\s*assert\s*\(' $$out/netlist.v | head -5 | grep . || { echo "ERROR: netlist contains assert statements"; exit 1; }; \
-	cp $$out/netlist.v $$out/netlist_sim.v && echo ihp-sg13g2 > $$out/asic_tech && \
-	echo "$(ASIC_CLK_PERIOD)" > $$out/asic_clk_period && \
-	$(PYTHON) scripts/sim/modelsim/prefix_postsyn_netlist_modules.py $$out/netlist_sim.v || exit 1; \
-	sh scripts/synthesis/opensta/run_sta.sh $$out; sta_rc=$$?; \
-	rm -rf $(SYNTH_DIR)/last_output && cp -R $$out $(SYNTH_DIR)/last_output && \
-	echo "Synthesis log, netlist and reports in $$out (copied to $(SYNTH_DIR)/last_output)"; \
-	exit $$sta_rc
+asic-yosys: $(ASIC_PDK_DEP)
+	$(call asic_check_tech)
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --target=$(ASIC_YOSYS_TARGET_$(TECH)) openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+	@work=$(call asic_work_dir,$(ASIC_YOSYS_TARGET_$(TECH)),yosys); \
+	sh scripts/synthesis/save_output.sh yosys $(TECH) "$$work" "$$work/yosys.log" --sta
 
-## OpenSTA reports (timing, power, ...) of the latest `make asic-yosys` netlist, in
-## implementation/synthesis/last_output (e.g. after installing OpenSTA)
+## Design Compiler synthesis for TECH (scripts/synthesis/dc: the polheepo DC flow, compile_ultra
+## -timing -gate_clock -retime; same constraints as asic-yosys).
+## Log, netlist and DC reports in implementation/synthesis/output_dc_<tech>_<date>, copied to
+## implementation/synthesis/last_output. OpenSTA on its netlist: `make asic-dc-sta`.
+## Needs, once per technology, `make asic-tech-db TECH=<tech>`.
+## @param TECH=[ihp-sg13g2(default),tsmc65] (tsmc65: design kit in $TSMC65)
+## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
+asic-dc: $(ASIC_PDK_DEP)
+	$(call asic_check_tech)
+	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --target=$(ASIC_DC_TARGET_$(TECH)) $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log
+	@work=$(call asic_work_dir,$(ASIC_DC_TARGET_$(TECH)),design_compiler); \
+	sh scripts/synthesis/save_output.sh dc $(TECH) "$$work" build-$@.log
+
+## OpenSTA reports (timing, power, ...) of the latest synthesis output, in
+## implementation/synthesis/last_output (in its opensta/ folder for a Design Compiler netlist)
 asic-sta:
-	@test -f $(SYNTH_DIR)/last_output/netlist.v || { echo "ERROR: no netlist, run 'make asic-yosys' first"; exit 1; }
+	@test -f $(SYNTH_DIR)/last_output/netlist.v || { echo "ERROR: no netlist, run 'make asic-yosys' or 'make asic-dc' first"; exit 1; }
 	@sh scripts/synthesis/opensta/run_sta.sh $(SYNTH_DIR)/last_output
 
+## OpenSTA reports of the latest Design Compiler netlist (`make asic-dc`), in the opensta/
+## folder of its output (the DC reports are left untouched)
+## @param SYNTH_OUT=<a synthesis output folder> (default: the latest output_dc_*)
+asic-dc-sta:
+	@out="$(SYNTH_OUT)"; [ -n "$$out" ] || out=$$(ls -dt $(SYNTH_DIR)/output_dc_* 2>/dev/null | head -n 1); \
+	test -n "$$out" -a -f "$$out/netlist.v" || { echo "ERROR: no Design Compiler netlist, run 'make asic-dc' first"; exit 1; }; \
+	sh scripts/synthesis/opensta/run_sta.sh $$out
+
 ## Prints what the ASIC flows find in the design kit of TECH, and what is missing (needs tclsh)
-## @param TECH=[ihp-sg13g2(default)]
+## @param TECH=[ihp-sg13g2(default),tsmc65]
 asic-tech-check:
+	$(call asic_check_tech)
 	tclsh scripts/asic/tech/query.tcl $(TECH) check
 
+## Converts the Liberty files Design Compiler needs into .db, in build/tech_db/TECH (needs lc_shell).
+## Needed once for ihp-sg13g2, whose PDK ships Liberty only.
+## @param TECH=[ihp-sg13g2(default),tsmc65]
+asic-tech-db: $(ASIC_PDK_DEP)
+	$(call asic_check_tech)
+	mkdir -p $(BUILD_DIR)/tech_db
+	cd $(BUILD_DIR)/tech_db && ASIC_TECH_TCL=$(mkfile_path)/scripts/asic/tech/$(TECH).tcl lc_shell -f $(mkfile_path)/scripts/asic/lib2db.tcl 2>&1 | tee lib2db-$(TECH).log
+
 ## @section Post-synthesis Simulation
-## Questasim post-synthesis (gate-level) simulation build of the `make asic-yosys` netlist.
+## Questasim post-synthesis (gate-level) simulation build of the latest `make asic-yosys` or `make asic-dc` netlist.
 questasim-build-postsynth:
 	$(if $(FUSESOC_BUILD_DIR),rm -rf $(QUESTASIM_POSTSYNTH_DIR))
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis --tool=modelsim $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth.log
@@ -402,9 +436,9 @@ questasim-run-postsynth-app: app
 questasim-run-postsynth-opt:
 	$(MAKE) -C $(QUESTASIM_POSTSYNTH_DIR) run RUN_OPT=1 PLUSARGS="c firmware=../../../sw/build/main.hex boot_sel=1 maxcycles=$(POSTSYNTH_MAX_CYCLES)"
 
-## Verilator post-synthesis (gate-level) simulation build of the `make asic-yosys` netlist.
+## Verilator post-synthesis (gate-level) simulation build of the latest `make asic-yosys` or `make asic-dc` netlist.
 verilator-build-postsynth: | .check-verilator
-	@test -f $(POSTSYNTH_NETLIST) || { echo "ERROR: $(POSTSYNTH_NETLIST) not found - run 'make asic-yosys' first"; exit 1; }
+	@test -f $(POSTSYNTH_NETLIST) || { echo "ERROR: $(POSTSYNTH_NETLIST) not found - run 'make asic-yosys' or 'make asic-dc' first"; exit 1; }
 	tclsh scripts/sim/verilator/gen_postsyn_cells.tcl $$(cat $(POSTSYNTH_DIR)/asic_tech) $(POSTSYNTH_NETLIST) $(POSTSYNTH_VERILATOR_CELLS)
 	$(if $(FUSESOC_BUILD_DIR),rm -rf $(VERILATOR_POSTSYNTH_DIR))
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --no-export --target=sim_postsynthesis_verilator --tool=verilator $(FUSESOC_FLAGS) --build openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee buildsim_postsynth_verilator.log

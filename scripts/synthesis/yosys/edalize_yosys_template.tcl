@@ -99,7 +99,7 @@ proc sdc_clocks {sdc} {
 	return $clocks
 }
 
-set sdc_file [file normalize ../../../scripts/synthesis/yosys/constraints.sdc]
+set sdc_file [file normalize ../../../scripts/synthesis/constraints.sdc]
 puts "\[x-heep] clock constraints: $sdc_file"
 set abc_delay ""
 set rpt [open report/clocks.rpt w]

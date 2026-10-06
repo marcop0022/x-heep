@@ -2,13 +2,14 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# OpenSTA reports of the `make asic-yosys` netlist: the reports of the Design
-# Compiler flow (scripts/synthesis/dc_shell/dc_script.tcl) that Yosys cannot
-# produce. Run by run_sta.sh.
+# OpenSTA reports of a synthesis netlist (`make asic-yosys`, `make asic-dc-sta`):
+# the reports of the Design Compiler flow (scripts/synthesis/dc/dc_script.tcl) that
+# Yosys cannot produce. Run by run_sta.sh.
 #
 # Input: $XHEEP_SYNTH_OUT, a synthesis output folder with netlist.v,
 # constraints.sdc, asic_tech (technology) and asic_clk_period ($ASIC_CLK_PERIOD
-# of the synthesis, empty for the SDC default). Reports written there:
+# of the synthesis, empty for the SDC default). Reports written into
+# $XHEEP_STA_REPORTS (default: the same folder):
 #   clocks.rpt                 clock properties and skew (after the Yosys section)
 #   timing_loop.rpt            combinational loops
 #   check_timing_compile.rpt   unclocked registers, unconstrained endpoints, ...
@@ -24,6 +25,11 @@ if {![info exists ::env(XHEEP_SYNTH_OUT)]} {
   error "\[x-heep] \$XHEEP_SYNTH_OUT is not set: the synthesis output folder to analyse"
 }
 set out [file normalize $::env(XHEEP_SYNTH_OUT)]
+set rpt_dir $out
+if {[info exists ::env(XHEEP_STA_REPORTS)] && $::env(XHEEP_STA_REPORTS) ne ""} {
+  set rpt_dir [file normalize $::env(XHEEP_STA_REPORTS)]
+}
+file mkdir $rpt_dir
 set top x_heep_system
 
 proc xh_read {path} {
@@ -50,7 +56,7 @@ proc xh_capture {body} {
 # Writes report $file (mode w) or appends to it (mode a): a header, then $text
 proc xh_report {file title text {mode w}} {
   if {[catch {sta::version} version]} { set version "" }
-  set f [open $::out/$file $mode]
+  set f [open $::rpt_dir/$file $mode]
   puts $f "****************************************"
   puts $f "Report : $title"
   puts $f "Design : $::top"
@@ -59,7 +65,7 @@ proc xh_report {file title text {mode w}} {
   puts $f "****************************************\n"
   puts $f $text
   close $f
-  puts "\[x-heep] $::out/$file"
+  puts "\[x-heep] $::rpt_dir/$file"
 }
 
 set tech [xh_read $out/asic_tech]
@@ -179,8 +185,8 @@ if {[file exists $out/area.rpt] && [regexp {Chip area for top module[^\n]*} [xh_
 }
 xh_report qor.rpt "qor" $text
 
-write_sdc $out/netlist.sdc
-puts "\[x-heep] $out/netlist.sdc"
+write_sdc $rpt_dir/netlist.sdc
+puts "\[x-heep] $rpt_dir/netlist.sdc"
 
 # run_sta.sh checks for this line
 puts "\[x-heep] OpenSTA reports done"

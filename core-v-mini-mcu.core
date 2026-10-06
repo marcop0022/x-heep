@@ -146,6 +146,16 @@ filesets:
     depend:
     - technology::prim_ihp-sg13g2
 
+  asic-tsmc65:
+    depend:
+    - technology::prim_tsmc65
+
+  # Design Compiler top: x_heep_system with plain-vector ports (pre_build hook)
+  generate_dc_top:
+    files:
+    - scripts/synthesis/dc/generate_dc_top.py
+    file_type: user
+
   # Scripts for hooks
   post_build_modelsim_scripts:
     files:
@@ -281,6 +291,11 @@ parameters:
     description: Turn off asserts for PULP common cells
     paramtype: vlogdefine
     default: false
+  XHEEP_STANDALONE_SYNTHESIS:
+    datatype: bool
+    description: x_heep_system without the CV-X-IF interface ports (ASIC synthesis top)
+    paramtype: vlogdefine
+    default: false
   USE_HLS_EXAMPLE:
     datatype: bool
     paramtype: vlogdefine
@@ -341,6 +356,14 @@ scripts:
     - ../../../scripts/synthesis/yosys/generate_yosys_filelist.sh
   asic_tech_ihp_sg13g2:
     cmd: [sh, -c, "echo 'set ASIC_TECH ihp-sg13g2' > asic_tech.tcl"]
+  asic_tech_tsmc65:
+    cmd: [sh, -c, "echo 'set ASIC_TECH tsmc65' > asic_tech.tcl"]
+
+  # ASIC Design Compiler synthesis utils
+  generate_dc_top:
+    cmd:
+    - python
+    - ../../../scripts/synthesis/dc/generate_dc_top.py
 
 targets:
   default: &default_target
@@ -784,11 +807,79 @@ targets:
         - generate_yosys_filelist
         - asic_tech_ihp_sg13g2
     toplevel: [x_heep_system]
-    tools:
+    tools: &asic_yosys_tools
       yosys:
         arch: generic
         output_format: verilog
         yosys_template: ../../../scripts/synthesis/yosys/edalize_yosys_template.tcl
+
+  asic_yosys_synthesis_tsmc65:
+    <<: *default_target
+    default_tool: yosys
+    description: Yosys synthesis of X-HEEP for TSMC 65nm LP (design kit in $TSMC65)
+    parameters:
+      - SYNTHESIS=true
+      - REMOVE_OBI_FIFO
+    filesets_append:
+      - x_heep_system
+      - asic-tsmc65
+    hooks:
+      pre_build:
+        - generate_yosys_filelist
+        - asic_tech_tsmc65
+    toplevel: [x_heep_system]
+    tools: *asic_yosys_tools
+
+  # Design Compiler synthesis (`make asic-dc TECH=<tech>`): top
+  # x_heep_system_dc_top (generate_dc_top.py), script scripts/synthesis/dc
+  asic_dc_synthesis_ihp_sg13g2:
+    <<: *default_target
+    default_tool: design_compiler
+    description: Design Compiler synthesis of X-HEEP for IHP-SG13G2
+    parameters:
+      - SYNTHESIS=true
+      - REMOVE_OBI_FIFO
+      - ASSERTS_OFF
+      - COMMON_CELLS_ASSERTS_OFF
+      - XHEEP_STANDALONE_SYNTHESIS=true
+    filesets_append:
+      - x_heep_system
+      - asic-ihp-sg13g2
+      - generate_dc_top
+    hooks:
+      pre_build:
+        - generate_dc_top
+        - asic_tech_ihp_sg13g2
+    toplevel: [x_heep_system]
+    tools: &asic_dc_tools
+      design_compiler:
+        script_dir:
+        - ../../../scripts/synthesis/dc
+        report_dir:
+        - report
+        dc_script:
+        - dc_script.tcl
+
+  asic_dc_synthesis_tsmc65:
+    <<: *default_target
+    default_tool: design_compiler
+    description: Design Compiler synthesis of X-HEEP for TSMC 65nm LP (design kit in $TSMC65)
+    parameters:
+      - SYNTHESIS=true
+      - REMOVE_OBI_FIFO
+      - ASSERTS_OFF
+      - COMMON_CELLS_ASSERTS_OFF
+      - XHEEP_STANDALONE_SYNTHESIS=true
+    filesets_append:
+      - x_heep_system
+      - asic-tsmc65
+      - generate_dc_top
+    hooks:
+      pre_build:
+        - generate_dc_top
+        - asic_tech_tsmc65
+    toplevel: [x_heep_system]
+    tools: *asic_dc_tools
 
   asic_librelane_chip_ihp:
     <<: *default_target

@@ -36,6 +36,8 @@ switch -- $what {
     foreach {label cmd} {
       "yosys: std-cell Liberty"        tech_stdcell_libs
       "yosys: hard-cell Liberty"       tech_yosys_macro_libs
+      "DC: target_library (.db)"       tech_dc_target_dbs
+      "DC: link_library (.db)"         tech_dc_link_dbs
       "sim: Verilog models"            tech_sim_models
     } {
       if {[catch {$cmd} res]} {

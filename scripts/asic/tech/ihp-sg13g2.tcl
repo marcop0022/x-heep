@@ -13,10 +13,15 @@
 #   TECH_ABC_DRIVING_CELL        cell ABC assumes drives the inputs
 #   TECH_ABC_LOAD_FF             load ABC assumes on the outputs, in fF
 #   TECH_CLOCK_GATE_CELLS        glob patterns of the integrated clock-gating cells (STA reports)
+#   TECH_DC_ICG_CELL             integrated clock-gating cell inserted by Design Compiler
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #   tech_yosys_macro_libs        Liberty of the hard cells the RTL instantiates (SRAM, IO)
 #   tech_sim_models              functional Verilog models (gate-level sim)
 #   tech_sim_macro_models        the same, IO pads and SRAM macros only
+#   tech_lib2db_libs             Liberty files Design Compiler needs, as .db
+#   tech_db_dirs                 extra directories holding .db files
+#   tech_dc_target_dbs           DC target_library
+#   tech_dc_link_dbs             DC link_library (without "*")
 
 source [file join [file dirname [info script]] common.tcl]
 
@@ -30,6 +35,9 @@ set TECH_SIM_VLOG_FLAGS {+define+FUNCTIONAL}
 set TECH_ABC_DRIVING_CELL sg13g2_buf_4
 set TECH_ABC_LOAD_FF 6.0
 set TECH_CLOCK_GATE_CELLS {sg13g2_lgcp_* sg13g2_slgcp_*}
+# Integrated clock-gating cell Design Compiler inserts (-gate_clock), the same
+# the clock-gate wrapper instantiates (hw/asic/ihp-sg13g2/rtl/prim_ihp_sg13g2_clk.sv)
+set TECH_DC_ICG_CELL sg13g2_slgcp_1
 
 proc _ihp_sg13g2_ref {} {
   set root [asic_root PDK_XHEEP "IHP-SG13G2 PDK"]
@@ -58,6 +66,22 @@ proc _ihp_sg13g2_io_libs {} {
 }
 
 proc tech_yosys_macro_libs {} { return [concat [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]] }
+
+# Design Compiler: the PDK ships Liberty only, converted once to .db by
+# `make asic-tech-db TECH=ihp-sg13g2` (into build/tech_db/ihp-sg13g2).
+proc tech_lib2db_libs {} {
+  return [concat [tech_stdcell_libs] [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]]
+}
+
+proc tech_db_dirs {} { return {} }
+
+proc tech_dc_target_dbs {} { return [asic_dbs_of ihp-sg13g2 [tech_stdcell_libs]] }
+
+proc tech_dc_link_dbs {} {
+  return [concat [tech_dc_target_dbs] \
+    [asic_dbs_of ihp-sg13g2 [_ihp_sg13g2_sram_libs]] \
+    [asic_dbs_of ihp-sg13g2 [_ihp_sg13g2_io_libs]]]
+}
 
 proc tech_sim_models {} {
   set ref [_ihp_sg13g2_ref]

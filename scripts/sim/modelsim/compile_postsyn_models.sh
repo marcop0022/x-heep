@@ -11,7 +11,7 @@ QUERY="tclsh $ROOT/scripts/asic/tech/query.tcl"
 set -e
 
 if [ ! -f "$TECH_FILE" ]; then
-  echo "[compile_postsyn_models] ERROR: $TECH_FILE not found: run 'make asic-yosys' first." >&2
+  echo "[compile_postsyn_models] ERROR: $TECH_FILE not found: run 'make asic-yosys' or 'make asic-dc' first." >&2
   exit 1
 fi
 TECH=$(cat "$TECH_FILE")
