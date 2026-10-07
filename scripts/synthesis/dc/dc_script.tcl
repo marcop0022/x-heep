@@ -84,6 +84,11 @@ if {[catch {
   set_wire_load_model -name $TECH_DC_ZERO_WIRE_LOAD
   set_app_var power_default_toggle_rate 0.1
   set_app_var power_default_static_probability 0.5
+  # Real loads on every net, as OpenSTA: by default DC models each net with
+  # more than 1000 loads (high_fanout_net_threshold) as 1000 pins of
+  # high_fanout_net_pin_capacitance (1 pF), i.e. 1 nF whatever the technology
+  # (seen on the clock nets: ~59 mW each on both IHP and TSMC)
+  set_app_var high_fanout_net_threshold 0
   file copy -force $sdc_file ${REPORT_DIR}/constraints.sdc
 
   report_clocks -attributes -skew > ${REPORT_DIR}/clocks.rpt
@@ -141,7 +146,10 @@ if {[catch {
   report_clock_gating > ${REPORT_DIR}/clock_gating.rpt
   report_power > ${REPORT_DIR}/power.rpt
   # The nets with the highest switching power (to check the clock/pad groups)
-  report_power -net -nworst 20 -nosplit > ${REPORT_DIR}/power_nets.rpt
+  # (all the hierarchy with -flat, if this DC version has it)
+  if {[catch {redirect ${REPORT_DIR}/power_nets.rpt {report_power -net -flat -nworst 20 -nosplit}}]} {
+    redirect ${REPORT_DIR}/power_nets.rpt {report_power -net -nworst 20 -nosplit}
+  }
   # To check that no wire-load model is in effect
   report_wire_load > ${REPORT_DIR}/wire_load.rpt
   report_qor > ${REPORT_DIR}/qor.rpt
