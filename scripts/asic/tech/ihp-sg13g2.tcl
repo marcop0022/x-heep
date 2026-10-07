@@ -10,8 +10,8 @@
 #
 #   TECH_NAME, TECH_ROOT_VAR     technology name, env variable of its root
 #   TECH_SIM_VLOG_FLAGS          vlog flags for the simulation models
-#   TECH_ABC_DRIVING_CELL        cell ABC assumes drives the inputs
-#   TECH_ABC_LOAD_FF             load ABC assumes on the outputs, in fF
+#   TECH_ABC_DRIVING_CELL        cell ABC assumes drives the inputs (only with ASIC_ABC_SIZING=1)
+#   TECH_ABC_LOAD_FF             load ABC assumes on the outputs, in fF (only with ASIC_ABC_SIZING=1)
 #   TECH_CLOCK_GATE_CELLS        glob patterns of the integrated clock-gating cells (STA reports)
 #   TECH_ICG_CELL                integrated clock-gating cell that Yosys (clockgate)
 #                                and Design Compiler (-gate_clock) insert

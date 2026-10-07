@@ -369,6 +369,7 @@ pdk:
 ## @param ASIC_CORNER=[worst(default),typ] (library corner, the same for every tool)
 ## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
 ## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
+## @param ASIC_ABC_SIZING=[0(default),1] (ABC buffering and gate sizing; crashes on tsmc65)
 asic-yosys: $(ASIC_PDK_DEP)
 	$(call asic_check_tech)
 	$(FUSESOC) --cores-root $(FUSESOC_CORES_ROOT) run --target=$(ASIC_YOSYS_TARGET_$(TECH)) openhwgroup.org:systems:core-v-mini-mcu $(FUSESOC_PARAM) 2>&1 | tee build-$@.log

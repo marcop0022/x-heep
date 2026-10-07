@@ -127,8 +127,12 @@ file copy -force $sdc_file report/constraints.sdc
 
 set abc_args [list -liberty $stdcell_lib]
 if {$abc_delay ne ""} { lappend abc_args -D $abc_delay }
-# Input driver and output load of ABC's buffering and gate sizing (tech file)
-if {[info exists TECH_ABC_DRIVING_CELL] && [info exists TECH_ABC_LOAD_FF]} {
+# ABC buffering and gate sizing after mapping (buffer, upsize, dnsize), with the
+# input driver and output load of the tech file: off unless ASIC_ABC_SIZING=1.
+# On TSMC65 ABC crashes in it (segfault on the 64-bit minstret counter), so
+# it is off for every technology, to keep the flows comparable.
+if {[asic_env ASIC_ABC_SIZING] eq "1" && [info exists TECH_ABC_DRIVING_CELL] && [info exists TECH_ABC_LOAD_FF]} {
+	puts "\[x-heep] ABC buffering and gate sizing: on"
 	set constr [open abc.constr w]
 	puts $constr "set_driving_cell $TECH_ABC_DRIVING_CELL"
 	puts $constr "set_load $TECH_ABC_LOAD_FF"
