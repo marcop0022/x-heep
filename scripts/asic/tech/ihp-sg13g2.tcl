@@ -17,6 +17,7 @@
 #                                and Design Compiler (-gate_clock) insert
 #   TECH_ICG_PINS                its enable, clock and gated-clock pins (Yosys clockgate)
 #   TECH_ICG_TEST_PIN            its test-enable pin, tied low (Yosys clockgate)
+#   TECH_DC_ZERO_WIRE_LOAD       zero wire-load model of the std-cell library (Design Compiler)
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #
 # The Liberty files are those of the corner [asic_corner] ($ASIC_CORNER =
@@ -92,6 +93,8 @@ proc tech_yosys_macro_libs {} { return [concat [_ihp_sg13g2_sram_libs] [_ihp_sg1
 # voltage groups not defined: LBDB-206/235); X-HEEP does not use it, so it is
 # left out of the .db (scripts/asic/lib2db.tcl).
 set TECH_LIB2DB_DROP_CELLS {sg13g2_IOPadAnalog}
+# Wire-load model with zero wires, set by Design Compiler (no wire load, as OpenSTA)
+set TECH_DC_ZERO_WIRE_LOAD Zero
 proc tech_lib2db_libs {} {
   return [concat [tech_stdcell_libs] [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]]
 }

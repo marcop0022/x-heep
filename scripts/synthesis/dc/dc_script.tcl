@@ -77,8 +77,11 @@ if {[catch {
 
   # As OpenSTA on the Yosys netlist (scripts/synthesis/opensta/sta_reports.tcl):
   # no wire-load model, primary inputs toggling 0.1 times per clock cycle
+  # (the library's zero model, set explicitly: without a model DC falls back
+  # on the library default, e.g. area-based selection on IHP, which picked 1k)
   set_app_var auto_wire_load_selection false
-  catch {remove_wire_load_model [current_design]}
+  set_wire_load_mode top
+  set_wire_load_model -name $TECH_DC_ZERO_WIRE_LOAD
   set_app_var power_default_toggle_rate 0.1
   set_app_var power_default_static_probability 0.5
   file copy -force $sdc_file ${REPORT_DIR}/constraints.sdc
@@ -137,6 +140,8 @@ if {[catch {
   report_constraint > ${REPORT_DIR}/constraints.rpt
   report_clock_gating > ${REPORT_DIR}/clock_gating.rpt
   report_power > ${REPORT_DIR}/power.rpt
+  # The nets with the highest switching power (to check the clock/pad groups)
+  report_power -net -nworst 20 -nosplit > ${REPORT_DIR}/power_nets.rpt
   # To check that no wire-load model is in effect
   report_wire_load > ${REPORT_DIR}/wire_load.rpt
   report_qor > ${REPORT_DIR}/qor.rpt

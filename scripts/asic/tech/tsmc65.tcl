@@ -44,6 +44,8 @@ set TECH_CLOCK_GATE_CELLS {CKLNQD* CKLHQD*}
 set TECH_ICG_CELL CKLNQD16LVT
 set TECH_ICG_PINS {E CP Q}
 set TECH_ICG_TEST_PIN TE
+# Wire-load model with zero wires, set by Design Compiler (no wire load, as OpenSTA)
+set TECH_DC_ZERO_WIRE_LOAD ZeroWireload
 
 proc _tsmc65_front_end {} {
   set root [asic_root TSMC65 "TSMC65 design kit"]
