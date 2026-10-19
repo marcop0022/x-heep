@@ -10,8 +10,9 @@
 #     sta -no_init -no_splash -exit scripts/synthesis/opensta/report_path.tcl | tee path.log
 #
 # The globs match full instance names (e.g. "*gen_gpios*19*i_sync_gpio_input*",
-# the default of XHEEP_PATH_TO: the input synchronizer of GPIO 19). Printed:
-#   1. the worst paths to those cells, with hierarchical pins and nets;
+# the default of XHEEP_PATH_TO: the input synchronizer of GPIO 19);
+# XHEEP_PATH_TO=all analyses the worst paths of the whole design. Printed:
+#   1. the worst paths to those cells, with all the pins (hierarchical too);
 #   2. the worst path point by point: delay of each step, cell, and the
 #      top-level ports it goes through (i.e. through an IO pad);
 #   3. the connections of the net where the path has its largest step.
@@ -59,11 +60,17 @@ proc xh_cells {glob} {
   return $cells
 }
 
-set to_cells [xh_cells $to_glob]
-puts "\[x-heep] XHEEP_PATH_TO=$to_glob: [llength $to_cells] cell(s)"
-foreach c $to_cells { puts "  [get_full_name $c] ([get_property $c ref_name])" }
-if {[llength $to_cells] == 0} { error "\[x-heep] no cell matches $to_glob" }
-set path_args [list -to $to_cells]
+# XHEEP_PATH_TO=all: the worst paths of the whole design (as timing.rpt)
+set path_args {}
+if {$to_glob eq "all"} {
+  puts "\[x-heep] XHEEP_PATH_TO=all: the worst path of each path group"
+} else {
+  set to_cells [xh_cells $to_glob]
+  puts "\[x-heep] XHEEP_PATH_TO=$to_glob: [llength $to_cells] cell(s)"
+  foreach c $to_cells { puts "  [get_full_name $c] ([get_property $c ref_name])" }
+  if {[llength $to_cells] == 0} { error "\[x-heep] no cell matches $to_glob" }
+  lappend path_args -to $to_cells
+}
 if {$from_glob ne ""} {
   set from_cells [xh_cells $from_glob]
   puts "\[x-heep] XHEEP_PATH_FROM=$from_glob: [llength $from_cells] cell(s)"
@@ -72,19 +79,31 @@ if {$from_glob ne ""} {
 }
 
 # ---- 1. Worst paths, all the pins ----
-puts "\n==== 1. Worst setup paths (3 per endpoint) ===="
-set fields {input_pins hierarchical_pins nets capacitance slew fanout}
-if {[catch {report_checks {*}$path_args -path_delay max -format full_clock_expanded \
-              -fields $fields -digits 3 -endpoint_path_count 3 -unique_paths_to_endpoint}]} {
-  report_checks {*}$path_args -path_delay max -format full_clock_expanded \
-    -fields $fields -digits 3 -endpoint_count 3 -unique_paths_to_endpoint
+set fields {input_pins hierarchical_pins capacitance slew fanout}
+if {$to_glob eq "all"} {
+  puts "\n==== 1. Worst setup path of each path group ===="
+  report_checks -path_delay max -format full_clock_expanded -fields $fields -digits 3
+} else {
+  puts "\n==== 1. Worst setup paths (3 per endpoint) ===="
+  if {[catch {report_checks {*}$path_args -path_delay max -format full_clock_expanded \
+                -fields $fields -digits 3 -endpoint_path_count 3 -unique_paths_to_endpoint}]} {
+    report_checks {*}$path_args -path_delay max -format full_clock_expanded \
+      -fields $fields -digits 3 -endpoint_count 3 -unique_paths_to_endpoint
+  }
 }
 
 # ---- 2. Worst path, point by point ----
 puts "\n==== 2. Worst path, point by point ===="
 set big_pin ""
 if {[catch {
-  set path_end [lindex [find_timing_paths {*}$path_args -path_delay max] 0]
+  # The path ends come grouped by path group (asynchronous first): take the
+  # one with the worst slack
+  set path_end ""
+  foreach pe [find_timing_paths {*}$path_args -path_delay max] {
+    if {$path_end eq "" || [get_property $pe slack] < [get_property $path_end slack]} { set path_end $pe }
+  }
+  if {$path_end eq ""} { error "no path found" }
+  puts "Slack [format %.3f [get_property $path_end slack]] ns, endpoint [get_full_name [get_property $path_end endpoint]]"
   set prev ""
   set big 0.0
   set ports {}
@@ -118,7 +137,7 @@ if {[catch {
 if {$big_pin ne ""} {
   puts "\n==== 3. Net driving [get_full_name $big_pin] ===="
   if {[catch {
-    foreach net [get_nets -of_objects $big_pin] { report_net -connections -verbose -digits 3 $net }
+    foreach net [get_nets -of_objects $big_pin] { report_net -digits 3 $net }
   } err]} {
     puts "\[x-heep] report_net failed: $err"
   }
