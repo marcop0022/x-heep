@@ -94,6 +94,54 @@ read_verilog $out/netlist.v
 link_design $top
 read_sdc $out/constraints.sdc
 
+# ---- Timing first, before any other command ----
+# On the DC IHP netlist, with the clock, loop and power commands below run
+# first, report_checks/report_wns showed a -43 ns path (UART FIFO -> GPIO 19
+# input synchronizer, with missing stages) that neither DC nor an OpenSTA
+# session running only the timing commands (report_path.tcl) find: their
+# worst path is -0.02 ns (DC: 0.00 ns).
+
+# Worst paths
+set text [xh_capture {
+  report_checks -path_delay max -format full_clock_expanded \
+    -fields {capacitance slew input_pins fanout} -digits 3
+  report_checks -path_delay min -format full_clock_expanded \
+    -fields {capacitance slew input_pins fanout} -digits 3
+}]
+xh_report timing.rpt "timing -path_delay max/min" $text
+
+# Constraints: worst values, then the violators
+set checks {-max_delay -min_delay -max_slew -max_capacitance -max_fanout}
+set text [xh_capture {
+  report_worst_slack -max -digits 3
+  report_worst_slack -min -digits 3
+  report_tns -max -digits 3
+  report_tns -min -digits 3
+  report_check_types {*}$checks -digits 3
+}]
+append text "\n---- Violators ----\n\n"
+append text [xh_capture { report_check_types {*}$checks -violators -digits 3 }]
+xh_report constraints.rpt "constraints" $text
+
+# The timing part of qor.rpt, and the worst setup slack found by the path
+# search, which must match `wns max` (consistency check)
+set qor_timing [xh_capture {
+  report_clock_min_period
+  report_wns -max -digits 3
+  report_tns -max -digits 3
+  report_wns -min -digits 3
+  report_tns -min -digits 3
+}]
+set worst_path_slack ""
+if {[catch {
+  foreach pe [find_timing_paths -path_delay max] {
+    set s [get_property $pe slack]
+    if {$worst_path_slack eq "" || $s < $worst_path_slack} { set worst_path_slack $s }
+  }
+} err]} {
+  set worst_path_slack "unavailable ($err)"
+}
+
 # No simulation activity: every input toggles with probability 0.1 per cycle
 set power_activity 0.1
 if {[catch {set_power_activity -input -activity $power_activity} err]} {
@@ -132,28 +180,6 @@ xh_report timing_loop.rpt "timing loops" [xh_capture { check_setup -verbose -loo
 # Timing checks of the constraints: unclocked registers, unconstrained endpoints, ...
 xh_report check_timing_compile.rpt "check timing" [xh_capture { check_setup -verbose }]
 
-# Worst paths
-set text [xh_capture {
-  report_checks -path_delay max -format full_clock_expanded \
-    -fields {capacitance slew input_pins fanout} -digits 3
-  report_checks -path_delay min -format full_clock_expanded \
-    -fields {capacitance slew input_pins fanout} -digits 3
-}]
-xh_report timing.rpt "timing -path_delay max/min" $text
-
-# Constraints: worst values, then the violators
-set checks {-max_delay -min_delay -max_slew -max_capacitance -max_fanout}
-set text [xh_capture {
-  report_worst_slack -max -digits 3
-  report_worst_slack -min -digits 3
-  report_tns -max -digits 3
-  report_tns -min -digits 3
-  report_check_types {*}$checks -digits 3
-}]
-append text "\n---- Violators ----\n\n"
-append text [xh_capture { report_check_types {*}$checks -violators -digits 3 }]
-xh_report constraints.rpt "constraints" $text
-
 # Clock gating: Yosys does not insert clock gates (no -gate_clock), these are
 # the ones the RTL instantiates
 set text "Integrated clock-gating cells ($clock_gate_cells): [llength $icgs]\n"
@@ -178,13 +204,12 @@ foreach clk [all_clocks] {
   append text "Clock [get_full_name $clk]: period [get_property $clk period] ns\n"
 }
 append text "\n"
-append text [xh_capture {
-  report_clock_min_period
-  report_wns -max -digits 3
-  report_tns -max -digits 3
-  report_wns -min -digits 3
-  report_tns -min -digits 3
-}]
+append text $qor_timing
+if {[string is double -strict $worst_path_slack]} {
+  append text "worst path slack (path search) [format %.3f $worst_path_slack]\n"
+} else {
+  append text "worst path slack (path search) $worst_path_slack\n"
+}
 append text "\nLeaf cells: $n_cells\n"
 append text "Registers: $n_registers\n"
 append text "Integrated clock gates: [llength $icgs]\n"
