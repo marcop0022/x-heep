@@ -435,7 +435,7 @@ thesis-runs:
 ## @param METRICS_CSV=<file> (default metrics.csv)
 METRICS_CSV ?= metrics.csv
 thesis-metrics:
-	@outs="$(SYNTH_OUTS)"; \
+	@outs="$(strip $(SYNTH_OUTS))"; \
 	if [ -z "$$outs" ]; then c=$$(ls -dt implementation/campaigns/*/ 2>/dev/null | head -n 1); outs=$$(ls -d $${c}yosys_* $${c}dc_* 2>/dev/null); fi; \
 	test -n "$$outs" || { echo "ERROR: no synthesis output: set SYNTH_OUTS or run 'make thesis-runs'"; exit 1; }; \
 	tclsh scripts/synthesis/extract_metrics.tcl $$outs > $(METRICS_CSV) && echo "Metrics in $(METRICS_CSV)"
