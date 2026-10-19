@@ -106,6 +106,8 @@ set icgs {}
 set clock_gate_cells [expr {[info exists TECH_CLOCK_GATE_CELLS] ? $TECH_CLOCK_GATE_CELLS : {}}]
 foreach cell [get_cells -hierarchical *] {
   if {[catch {get_property $cell liberty_cell} lib_cell] || $lib_cell eq ""} { continue }
+  # (the liberty_cell test alone also counted the hierarchical instances)
+  if {![catch {get_property $cell is_hierarchical} hier] && $hier} { continue }
   incr n_cells
   set ref [get_property $cell ref_name]
   foreach pattern $clock_gate_cells {
