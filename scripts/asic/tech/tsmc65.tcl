@@ -46,6 +46,8 @@ set TECH_ICG_PINS {E CP Q}
 set TECH_ICG_TEST_PIN TE
 # Wire-load model with zero wires, set by Design Compiler (no wire load, as OpenSTA)
 set TECH_DC_ZERO_WIRE_LOAD ZeroWireload
+# Reference 2-input NAND for gate-equivalent (GE) areas (thesis metrics)
+set TECH_NAND2_CELL ND2D1LVT
 
 proc _tsmc65_front_end {} {
   set root [asic_root TSMC65 "TSMC65 design kit"]
@@ -90,6 +92,9 @@ proc _tsmc65_sram_libs {} {
 }
 
 proc tech_yosys_macro_libs {} { return [concat [_tsmc65_sram_libs] [_tsmc65_io_libs]] }
+
+# The IO pad Liberty files among tech_yosys_macro_libs (the others are SRAMs)
+proc tech_io_libs {} { return [_tsmc65_io_libs] }
 
 # Design Compiler: TSMC ships the .db next to the Liberty; the SRAM .db may be
 # in <SRAM>/DB. `make asic-tech-db TECH=tsmc65` converts any missing one.

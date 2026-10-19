@@ -2,6 +2,7 @@
 *.log
 build/
 implementation/synthesis/
+implementation/campaigns/
 hw/asic/pdk/
 *.so
 *.hex

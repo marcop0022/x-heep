@@ -7,7 +7,8 @@
 # into implementation/synthesis/output_<tool>_<tech>_<date>, copied to
 # implementation/synthesis/last_output (read by the post-synthesis simulations):
 #   netlist.v, netlist_sim.v (modules prefixed for simulation), *.rpt,
-#   constraints.sdc, <tool>.log, asic_tech, asic_corner, asic_clk_period, synth_tool
+#   constraints.sdc, <tool>.log, asic_tech, asic_corner, asic_clk_period, synth_tool,
+#   git_commit (the commit of the flow, "(modified)" if tracked files had changes)
 # With --sta, then runs the OpenSTA reports (scripts/synthesis/opensta/run_sta.sh).
 #
 # Usage: save_output.sh <yosys|dc> <tech> <fusesoc work dir> <log> [--sta]
@@ -35,6 +36,9 @@ echo "$tech" > "$out/asic_tech"
 echo "$tool" > "$out/synth_tool"
 echo "${ASIC_CLK_PERIOD:-}" > "$out/asic_clk_period"
 echo "${ASIC_CORNER:-worst}" > "$out/asic_corner"
+commit=$(git describe --always --tags 2>/dev/null || echo unknown)
+git diff --quiet HEAD -- 2>/dev/null || commit="$commit (modified)"
+echo "$commit" > "$out/git_commit"
 cp "$out/netlist.v" "$out/netlist_sim.v"
 ${PYTHON:-python} scripts/sim/modelsim/prefix_postsyn_netlist_modules.py "$out/netlist_sim.v" || exit 1
 

@@ -18,11 +18,13 @@
 #   TECH_ICG_PINS                its enable, clock and gated-clock pins (Yosys clockgate)
 #   TECH_ICG_TEST_PIN            its test-enable pin, tied low (Yosys clockgate)
 #   TECH_DC_ZERO_WIRE_LOAD       zero wire-load model of the std-cell library (Design Compiler)
+#   TECH_NAND2_CELL              reference 2-input NAND, the unit of gate-equivalent areas
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #
 # The Liberty files are those of the corner [asic_corner] ($ASIC_CORNER =
 # worst: slow 1.08V 125C, default; typ: 1.2V 25C), the same for every flow.
 #   tech_yosys_macro_libs        Liberty of the hard cells the RTL instantiates (SRAM, IO)
+#   tech_io_libs                 the IO pad ones among them
 #   tech_sim_models              functional Verilog models (gate-level sim)
 #   tech_sim_macro_models        the same, IO pads and SRAM macros only
 #   tech_lib2db_libs             Liberty files Design Compiler needs, as .db
@@ -87,6 +89,9 @@ proc _ihp_sg13g2_io_libs {} {
 
 proc tech_yosys_macro_libs {} { return [concat [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]] }
 
+# The IO pad Liberty files among tech_yosys_macro_libs (the others are SRAMs)
+proc tech_io_libs {} { return [_ihp_sg13g2_io_libs] }
+
 # Design Compiler: the PDK ships Liberty only, converted once to .db by
 # `make asic-tech-db TECH=ihp-sg13g2` (into build/tech_db/ihp-sg13g2).
 # Library Compiler rejects the analog pad of the slow IO Liberty (pad pin and
@@ -95,6 +100,8 @@ proc tech_yosys_macro_libs {} { return [concat [_ihp_sg13g2_sram_libs] [_ihp_sg1
 set TECH_LIB2DB_DROP_CELLS {sg13g2_IOPadAnalog}
 # Wire-load model with zero wires, set by Design Compiler (no wire load, as OpenSTA)
 set TECH_DC_ZERO_WIRE_LOAD Zero
+# Reference 2-input NAND for gate-equivalent (GE) areas (thesis metrics)
+set TECH_NAND2_CELL sg13g2_nand2_1
 proc tech_lib2db_libs {} {
   return [concat [tech_stdcell_libs] [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]]
 }

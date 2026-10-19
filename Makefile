@@ -420,6 +420,26 @@ asic-tech-db: $(ASIC_PDK_DEP)
 	mkdir -p $(BUILD_DIR)/tech_db
 	cd $(BUILD_DIR)/tech_db && ASIC_TECH_TCL=$(mkfile_path)/scripts/asic/tech/$(TECH).tcl lc_shell -f $(mkfile_path)/scripts/asic/lib2db.tcl 2>&1 | tee lib2db-$(TECH).log
 
+## Synthesis campaign of the tool/technology comparison (scripts/synthesis/thesis_runs.sh): asic-yosys and
+## asic-dc (+ OpenSTA on the DC netlist) for every technology, with the same clock period and corner.
+## Outputs linked, runs.txt, metrics.csv and campaign.log in implementation/campaigns/<date>_<git describe>.
+## @param THESIS_TECHS="ihp-sg13g2 tsmc65"(default)
+## @param THESIS_TOOLS="yosys dc"(default)
+## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
+## @param ASIC_CORNER=[worst(default),typ]
+thesis-runs:
+	@sh scripts/synthesis/thesis_runs.sh
+
+## Metrics of synthesis outputs as CSV (scripts/synthesis/extract_metrics.tcl), into METRICS_CSV
+## @param SYNTH_OUTS=<synthesis output folders> (default: those of the latest campaign)
+## @param METRICS_CSV=<file> (default metrics.csv)
+METRICS_CSV ?= metrics.csv
+thesis-metrics:
+	@outs="$(SYNTH_OUTS)"; \
+	if [ -z "$$outs" ]; then c=$$(ls -dt implementation/campaigns/*/ 2>/dev/null | head -n 1); outs=$$(ls -d $${c}yosys_* $${c}dc_* 2>/dev/null); fi; \
+	test -n "$$outs" || { echo "ERROR: no synthesis output: set SYNTH_OUTS or run 'make thesis-runs'"; exit 1; }; \
+	tclsh scripts/synthesis/extract_metrics.tcl $$outs > $(METRICS_CSV) && echo "Metrics in $(METRICS_CSV)"
+
 ## @section Post-synthesis Simulation
 ## Questasim post-synthesis (gate-level) simulation build of the latest `make asic-yosys` or `make asic-dc` netlist.
 questasim-build-postsynth:
