@@ -23,7 +23,16 @@
 # XHEEP_REPAIR_OUT. The timing, power, ... reports are those of OpenSTA
 # (sta_reports.tcl), as for every netlist.
 
-set root [file normalize [file join [file dirname [info script]] .. .. ..]]
+# Repository root: $XHEEP_ROOT (set by run_repair.sh), since OpenROAD does not
+# give the script its own path (info script)
+if {[info exists ::env(XHEEP_ROOT)] && $::env(XHEEP_ROOT) ne ""} {
+  set root [file normalize $::env(XHEEP_ROOT)]
+} else {
+  set root [file normalize [file join [file dirname [info script]] .. .. ..]]
+}
+if {![file exists $root/scripts/asic/tech/common.tcl]} {
+  error "\[x-heep] repository root not found ($root): set \$XHEEP_ROOT"
+}
 foreach v {XHEEP_SYNTH_OUT XHEEP_REPAIR_OUT} {
   if {![info exists ::env($v)]} { error "\[x-heep] \$$v is not set" }
 }

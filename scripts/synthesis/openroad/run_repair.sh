@@ -34,7 +34,7 @@ git diff --quiet HEAD -- 2>/dev/null || commit="$commit (modified)"
 echo "$commit" > "$out/git_commit"
 
 echo "OpenROAD repair of $in into $out (log: $out/openroad.log)"
-XHEEP_SYNTH_OUT="$in" XHEEP_REPAIR_OUT="$out" "$openroad" -no_init -no_splash -exit \
+XHEEP_ROOT="$(pwd)" XHEEP_SYNTH_OUT="$in" XHEEP_REPAIR_OUT="$out" "$openroad" -no_init -no_splash -exit \
   scripts/synthesis/openroad/repair.tcl > "$out/openroad.log" 2>&1
 if [ ! -f "$out/netlist.v" ] || ! grep -q "OpenROAD repair done" "$out/openroad.log"; then
   echo "ERROR: OpenROAD repair failed, see $out/openroad.log"
