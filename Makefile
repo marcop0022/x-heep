@@ -376,6 +376,21 @@ asic-yosys: $(ASIC_PDK_DEP)
 	@work=$(call asic_work_dir,$(ASIC_YOSYS_TARGET_$(TECH)),yosys); \
 	sh scripts/synthesis/save_output.sh yosys $(TECH) "$$work" "$$work/yosys.log" --sta
 
+## OpenROAD electrical repair of a Yosys netlist (scripts/synthesis/openroad): repair_design and
+## repair_timing, with the libraries, corner and constraints of the synthesis, no wire load. The
+## repaired netlist is a new synthesis output (output_yosys-or_<tech>_<date>), analysed with OpenSTA.
+## @param TECH=[ihp-sg13g2(default),tsmc65]
+## @param SYNTH_OUT=<a Yosys output folder> (default: the latest output_yosys_<TECH>_*)
+## @param OPENROAD=<openroad executable> (default openroad, e.g. $(conda run -n openroad which openroad))
+## @param XHEEP_REPAIR_TIMING=[1(default),0] (0: repair_design only)
+OPENROAD ?= openroad
+asic-yosys-repair: $(ASIC_PDK_DEP)
+	$(call asic_check_tech)
+	@command -v $(OPENROAD) >/dev/null || { echo "ERROR: OpenROAD ('$(OPENROAD)') not found: set OPENROAD"; exit 1; }
+	@in="$(strip $(SYNTH_OUT))"; [ -n "$$in" ] || in=$$(ls -dt $(SYNTH_DIR)/output_yosys_$(TECH)_* 2>/dev/null | head -n 1); \
+	test -n "$$in" || { echo "ERROR: no Yosys output for $(TECH): run 'make asic-yosys TECH=$(TECH)' first"; exit 1; }; \
+	OPENROAD=$(OPENROAD) sh scripts/synthesis/openroad/run_repair.sh $$in
+
 ## Design Compiler synthesis for TECH (scripts/synthesis/dc: the polheepo DC flow, compile_ultra
 ## -timing -gate_clock, aligned with asic-yosys: same libraries, corner, constraints, clock-gating cell).
 ## Log, netlist and DC reports in implementation/synthesis/output_dc_<tech>_<date>, copied to
@@ -424,7 +439,7 @@ asic-tech-db: $(ASIC_PDK_DEP)
 ## asic-dc (+ OpenSTA on the DC netlist) for every technology, with the same clock period and corner.
 ## Outputs linked, runs.txt, metrics.csv and campaign.log in implementation/campaigns/<date>_<git describe>.
 ## @param THESIS_TECHS="ihp-sg13g2 tsmc65"(default)
-## @param THESIS_TOOLS="yosys dc"(default)
+## @param THESIS_TOOLS="yosys yosys-or dc"(default; yosys-or: OpenROAD repair of the Yosys netlist, needs OPENROAD)
 ## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
 ## @param ASIC_CORNER=[worst(default),typ]
 thesis-runs:
@@ -436,7 +451,7 @@ thesis-runs:
 METRICS_CSV ?= metrics.csv
 thesis-metrics:
 	@outs="$(strip $(SYNTH_OUTS))"; \
-	if [ -z "$$outs" ]; then c=$$(ls -dt implementation/campaigns/*/ 2>/dev/null | head -n 1); outs=$$(ls -d $${c}yosys_* $${c}dc_* 2>/dev/null); fi; \
+	if [ -z "$$outs" ]; then c=$$(ls -dt implementation/campaigns/*/ 2>/dev/null | head -n 1); outs=$$(ls -d $${c}yosys_* $${c}yosys-or_* $${c}dc_* 2>/dev/null); fi; \
 	test -n "$$outs" || { echo "ERROR: no synthesis output: set SYNTH_OUTS or run 'make thesis-runs'"; exit 1; }; \
 	tclsh scripts/synthesis/extract_metrics.tcl $$outs > $(METRICS_CSV) && echo "Metrics in $(METRICS_CSV)"
 

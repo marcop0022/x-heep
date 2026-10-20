@@ -15,8 +15,9 @@
 #   combinational (of which buffers/inverters), sequential, integrated clock
 #   gates, SRAM macros and IO pads; logic = combinational + sequential + clock
 #   gates, also in gate equivalents (GE, area of TECH_NAND2_CELL). The netlists
-#   are uniquified (one instance per module), so the per-module counts add up
-#   to the flat ones; cells_check compares them with the tool's own count.
+#   of Yosys and DC are hierarchical and uniquified (one instance per module),
+#   so the per-module counts add up to the flat ones; the OpenROAD-repaired ones
+#   (yosys-or) are flat. cells_check compares with the tool's own count.
 # - Timing and power: OpenSTA (qor/timing/power.rpt; opensta/ for DC outputs)
 #   for every netlist, and Design Compiler's own reports for DC outputs.
 # - Runtime and memory: from the tool log.
@@ -217,11 +218,13 @@ proc metrics {dir} {
   set sta $dir
   if {$tool eq "dc"} { set sta $dir/opensta }
   set qor [expr {[file exists $sta/qor.rpt] ? [read_file $sta/qor.rpt] : ""}]
-  # The tool's own leaf-cell count: Yosys design hierarchy, DC qor
+  # The tool's own leaf-cell count: Yosys design hierarchy, OpenROAD repair.rpt, DC qor
   set leaf ""
   if {$tool eq "yosys" && [file exists $dir/area.rpt]} {
     set leaf [first_match [read_file $dir/area.rpt] {^\s+(\d+)\s+\S+\s+x_heep_system$}]
-  } elseif {[file exists $dir/qor.rpt]} {
+  } elseif {$tool eq "yosys-or" && [file exists $dir/repair.rpt]} {
+    set leaf [first_match [read_file $dir/repair.rpt] {^Leaf cells: (\d+)}]
+  } elseif {$tool eq "dc" && [file exists $dir/qor.rpt]} {
     set leaf [first_match [read_file $dir/qor.rpt] {Leaf Cell Count:\s+(\d+)}]
   }
   dict set m cells_check [expr {$leaf eq "" ? "unknown" : ($leaf == $ntotal ? "ok" : "$tool $leaf")}]
@@ -256,6 +259,11 @@ proc metrics {dir} {
         && [regexp {CPU: user ([0-9.]+)s system ([0-9.]+)s, MEM: ([0-9.]+) MB peak} [read_file $dir/yosys.log] -> u s mem]} {
       dict set m tool_cpu_s [num [expr {$u + $s}]]
       dict set m tool_mem_mb [num $mem]
+    }
+  } elseif {$tool eq "yosys-or"} {
+    # The repair only (the Yosys run is in its own row)
+    if {[file exists $dir/repair.rpt]} {
+      dict set m tool_wall_s [num [first_match [read_file $dir/repair.rpt] {^Runtime: (\d+) s}]]
     }
   } else {
     if {[file exists $dir/area.rpt]} {

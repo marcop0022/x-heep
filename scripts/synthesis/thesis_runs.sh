@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Synthesis campaign of the tool/technology comparison (`make thesis-runs`):
-# for each technology, Yosys (with OpenSTA) and Design Compiler (then OpenSTA
+# for each technology, Yosys (with OpenSTA), the OpenROAD electrical repair of
+# its netlist (yosys-or, with OpenSTA) and Design Compiler (then OpenSTA
 # on its netlist), all with the same ASIC_CLK_PERIOD and ASIC_CORNER. The
 # campaign folder implementation/campaigns/<date>_<git describe> gets:
 #   runs.txt      tool, technology, status and output folder of each run
@@ -14,11 +15,11 @@
 # A failed run is recorded and the campaign goes on with the next one.
 #
 # Environment: THESIS_TECHS (default "ihp-sg13g2 tsmc65"), THESIS_TOOLS
-# (default "yosys dc"), plus those of the flows (ASIC_CLK_PERIOD, ASIC_CORNER,
-# TSMC65, ...).
+# (default "yosys yosys-or dc"), plus those of the flows (ASIC_CLK_PERIOD, ASIC_CORNER,
+# TSMC65, OPENROAD, ...). yosys-or repairs the Yosys netlist of the same campaign.
 
 techs=${THESIS_TECHS:-"ihp-sg13g2 tsmc65"}
-tools=${THESIS_TOOLS:-"yosys dc"}
+tools=${THESIS_TOOLS:-"yosys yosys-or dc"}
 make=${MAKE:-make}
 SYNTH_DIR=implementation/synthesis
 
@@ -36,11 +37,21 @@ latest() { ls -dt $SYNTH_DIR/output_$1_$2_* 2>/dev/null | head -n 1; }
 
 outs=""
 for tech in $techs; do
+  yosys_out=""
   for tool in $tools; do
     before=$(latest $tool $tech)
     echo "==== $(date +%H:%M) $tool $tech" | tee -a "$log"
-    if [ "$tool" = dc ]; then target=asic-dc; else target=asic-yosys; fi
-    $make $target TECH=$tech >> "$log" 2>&1
+    case $tool in
+      dc)       $make asic-dc TECH=$tech >> "$log" 2>&1 ;;
+      yosys)    $make asic-yosys TECH=$tech >> "$log" 2>&1 ;;
+      yosys-or)
+        if [ -z "$yosys_out" ]; then
+          echo "$tool $tech SKIPPED (no Yosys output in this campaign)" | tee -a "$camp/runs.txt" "$log"
+          continue
+        fi
+        $make asic-yosys-repair TECH=$tech SYNTH_OUT="$yosys_out" >> "$log" 2>&1 ;;
+      *)        echo "unknown tool $tool" | tee -a "$log"; continue ;;
+    esac
     rc=$?
     out=$(latest $tool $tech)
     if [ -z "$out" ] || [ "$out" = "$before" ] || [ ! -f "$out/netlist.v" ]; then
@@ -55,6 +66,7 @@ for tech in $techs; do
     echo "$tool $tech $status $out" | tee -a "$camp/runs.txt" "$log"
     ln -sfn "../../synthesis/$(basename "$out")" "$camp/${tool}_$tech"
     outs="$outs $out"
+    [ "$tool" = yosys ] && yosys_out=$out
   done
 done
 

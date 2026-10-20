@@ -1,0 +1,86 @@
+# Copyright 2026 Politecnico di Torino
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Electrical repair of a Yosys netlist with OpenROAD (`make asic-yosys-repair`,
+# run by run_repair.sh):
+#
+#   XHEEP_SYNTH_OUT=<Yosys output> XHEEP_REPAIR_OUT=<new output folder> \
+#     openroad -no_init -no_splash -exit scripts/synthesis/openroad/repair.tcl
+#
+# Design Compiler buffers high-fanout nets and optimizes the timing inside
+# compile_ultra; the open-source flow leaves this to physical design. This
+# step does it on the Yosys netlist before placement, with the libraries,
+# corner and constraints of the synthesis:
+#   repair_design   buffering/resizing for the library's max fanout,
+#                   transition and capacitance;
+#   repair_timing   setup-driven resizing, buffering, cloning
+#                   (skipped with XHEEP_REPAIR_TIMING=0).
+# As in the other flows there is no wire load: the library's zero model
+# (TECH_DC_ZERO_WIRE_LOAD), since OpenROAD would otherwise fall back on the
+# library's default wire-load models before placement.
+# Writes netlist.v (flat) and repair.rpt (cells, buffers, runtime) into
+# XHEEP_REPAIR_OUT. The timing, power, ... reports are those of OpenSTA
+# (sta_reports.tcl), as for every netlist.
+
+set root [file normalize [file join [file dirname [info script]] .. .. ..]]
+foreach v {XHEEP_SYNTH_OUT XHEEP_REPAIR_OUT} {
+  if {![info exists ::env($v)]} { error "\[x-heep] \$$v is not set" }
+}
+set in [file normalize $::env(XHEEP_SYNTH_OUT)]
+set out [file normalize $::env(XHEEP_REPAIR_OUT)]
+set do_timing [expr {![info exists ::env(XHEEP_REPAIR_TIMING)] || $::env(XHEEP_REPAIR_TIMING) ne "0"}]
+
+proc xh_read {path} {
+  set f [open $path]
+  set s [string trim [read $f]]
+  close $f
+  return $s
+}
+
+# Technology, corner and clock period of the synthesis
+set tech [xh_read $in/asic_tech]
+if {[file exists $in/asic_corner]} { set ::env(ASIC_CORNER) [xh_read $in/asic_corner] }
+if {[file exists $in/asic_clk_period] && [xh_read $in/asic_clk_period] ne ""} {
+  set ::env(ASIC_CLK_PERIOD) [xh_read $in/asic_clk_period]
+}
+source $root/scripts/asic/tech/$tech.tcl
+puts "\[x-heep] OpenROAD repair of $in ($tech, corner [asic_corner])"
+
+foreach lef [tech_lef_files] { read_lef $lef }
+read_liberty [lindex [tech_stdcell_libs] 0]
+foreach lib [tech_yosys_macro_libs] { read_liberty $lib }
+read_verilog $in/netlist.v
+link_design x_heep_system
+read_sdc $in/constraints.sdc
+# (the std-cell library's model: the IO Liberty may define one with the same name)
+set std_lib [file rootname [file tail [lindex [tech_stdcell_libs] 0]]]
+if {[catch {set_wire_load_model -name $TECH_DC_ZERO_WIRE_LOAD -library $std_lib} err]} {
+  puts "\[x-heep] set_wire_load_model -library $std_lib: $err; retrying without -library"
+  set_wire_load_model -name $TECH_DC_ZERO_WIRE_LOAD
+}
+
+set rpt [list "OpenROAD electrical repair of [file tail $in] ($tech, corner [asic_corner])"]
+proc step {name} {
+  global rpt t0
+  set n [llength [get_cells -hierarchical *]]
+  set line [format "%-22s %8d instances  %6d s" $name $n [expr {[clock seconds] - $t0}]]
+  puts "\[x-heep] $line"
+  lappend rpt $line
+}
+set t0 [clock seconds]
+step "netlist (Yosys)"
+repair_design
+step "repair_design"
+if {$do_timing} {
+  repair_timing -setup
+  step "repair_timing -setup"
+}
+
+write_verilog $out/netlist.v
+lappend rpt "Leaf cells: [llength [get_cells -hierarchical *]]"
+lappend rpt "Runtime: [expr {[clock seconds] - $t0}] s"
+set f [open $out/repair.rpt w]
+puts $f [join $rpt "\n"]
+close $f
+puts "\[x-heep] OpenROAD repair done: $out/netlist.v"

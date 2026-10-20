@@ -39,6 +39,7 @@ switch -- $what {
       "DC: target_library (.db)"       tech_dc_target_dbs
       "DC: link_library (.db)"         tech_dc_link_dbs
       "sim: Verilog models"            tech_sim_models
+      "OpenROAD: LEF"                  tech_lef_files
     } {
       if {[catch {$cmd} res]} {
         puts "\n\[MISSING] $label\n  $res"

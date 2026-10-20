@@ -132,3 +132,29 @@ proc tech_sim_macro_models {} {
     [asic_find "TSMC65 SRAM Verilog models" TSMC65_SRAM_V \
       [list "$d/ts1n65lpll*/VERILOG/*ss1p08v125c.v" "$d/VERILOG/*.v" "$d/ts1n65lpll*/*.v"]]]
 }
+
+# OpenROAD (electrical repair of the Yosys netlist): the std-cell LEF (with
+# the technology layers) first, then those of the IO pads and of the SRAM
+# macros. <Back_End> is next to <Front_End>; metal stack $TSMC65_LEF_METALS
+# (default 9 layers). Only the cell sizes and pins matter to the repair (no
+# placement, no wires), so the metal stack does not change the result.
+proc _tsmc65_back_end {} {
+  return [lindex [asic_find "TSMC65 Back_End directory" TSMC65_BACK_END \
+    [list [file join [file dirname [_tsmc65_front_end]] Back_End]]] 0]
+}
+
+proc tech_lef_files {} {
+  set be [_tsmc65_back_end]
+  set d [_tsmc65_sram_dir]
+  set lm [asic_env TSMC65_LEF_METALS]
+  if {$lm eq ""} { set lm 9 }
+  set std [asic_find "TSMC65 std-cell LEF (${lm} metals)" TSMC65_STDCELL_LEF \
+    [list "$be/lef/tcbn65lplvt_*/lef/*${lm}lm*.lef" "$be/lef/tcbn65lplvt_*/*/*${lm}lm*.lef" "$be/lef/tcbn65lplvt_*/*${lm}lm*.lef"]]
+  set io [asic_find "TSMC65 IO pad LEF (${lm} metals)" TSMC65_IO_LEF \
+    [list "$be/lef/tphn65lpnv2od3_sl_*/mt_2/${lm}lm/lef/*.lef" "$be/lef/tphn65lpnv2od3_sl_*/*/${lm}lm/lef/*.lef"]]
+  set sram [asic_find "TSMC65 SRAM LEF" TSMC65_SRAM_LEFS \
+    [list "$d/ts1n65lpll*/LEF/*.lef" "$d/LEF/*.lef" "$d/ts1n65lpll*/*.lef"]]
+  if {[asic_env TSMC65_STDCELL_LEF] eq ""} { set std [lrange $std 0 0] }
+  if {[asic_env TSMC65_IO_LEF] eq ""} { set io [lrange $io 0 0] }
+  return [concat $std $io $sram]
+}

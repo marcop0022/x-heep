@@ -19,6 +19,7 @@
 #   TECH_ICG_TEST_PIN            its test-enable pin, tied low (Yosys clockgate)
 #   TECH_DC_ZERO_WIRE_LOAD       zero wire-load model of the std-cell library (Design Compiler)
 #   TECH_NAND2_CELL              reference 2-input NAND, the unit of gate-equivalent areas
+#   tech_lef_files               LEF files for OpenROAD (technology/std cells first)
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #
 # The Liberty files are those of the corner [asic_corner] ($ASIC_CORNER =
@@ -128,4 +129,15 @@ proc tech_sim_macro_models {} {
   return [concat \
     [asic_find "IHP IO Verilog models" IHP_SG13G2_IO_V [list "$ref/sg13g2_io/verilog/*.v"]] \
     [asic_find "IHP SRAM Verilog models" IHP_SG13G2_SRAM_V [list "$ref/sg13g2_sram/verilog/*.v"]]]
+}
+
+# OpenROAD (electrical repair of the Yosys netlist): the technology and
+# std-cell LEF first, then those of the IO pads and of the SRAM macros
+proc tech_lef_files {} {
+  set ref [_ihp_sg13g2_ref]
+  return [concat \
+    [asic_find "IHP technology LEF" IHP_SG13G2_TECH_LEF [list $ref/sg13g2_stdcell/lef/sg13g2_tech.lef]] \
+    [asic_find "IHP std-cell LEF" IHP_SG13G2_STDCELL_LEF [list $ref/sg13g2_stdcell/lef/sg13g2_stdcell.lef]] \
+    [asic_find "IHP IO LEF" IHP_SG13G2_IO_LEF [list $ref/sg13g2_io/lef/sg13g2_io.lef]] \
+    [asic_find "IHP SRAM LEF" IHP_SG13G2_SRAM_LEFS [list "$ref/sg13g2_sram/lef/*.lef"]]]
 }
