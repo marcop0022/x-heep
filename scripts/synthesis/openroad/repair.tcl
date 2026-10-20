@@ -53,7 +53,12 @@ if {[file exists $in/asic_corner]} { set ::env(ASIC_CORNER) [xh_read $in/asic_co
 if {[file exists $in/asic_clk_period] && [xh_read $in/asic_clk_period] ne ""} {
   set ::env(ASIC_CLK_PERIOD) [xh_read $in/asic_clk_period]
 }
-source $root/scripts/asic/tech/$tech.tcl
+# (from its own folder: the tech file sources common.tcl next to it through
+# info script, which is empty in OpenROAD)
+set here [pwd]
+cd $root/scripts/asic/tech
+source $tech.tcl
+cd $here
 puts "\[x-heep] OpenROAD repair of $in ($tech, corner [asic_corner])"
 
 foreach lef [tech_lef_files] { read_lef $lef }
