@@ -12,6 +12,9 @@
 # compile_ultra; the open-source flow leaves this to physical design. This
 # step does it on the Yosys netlist before placement, with the libraries,
 # corner and constraints of the synthesis:
+#   insert_tiecells tie cells (TECH_TIE_LO/HI) for the constants: the Yosys
+#                   netlist has them as literals, which OpenROAD writes as
+#                   undriven zero_/one_ nets (Design Compiler uses tie cells too);
 #   repair_design   buffering/resizing for the library's max fanout,
 #                   transition and capacitance;
 #   repair_timing   setup-driven resizing, buffering, cloning
@@ -84,6 +87,9 @@ proc step {name} {
 }
 set t0 [clock seconds]
 step "netlist (Yosys)"
+insert_tiecells $TECH_TIE_LO -prefix TIE_ZERO_
+insert_tiecells $TECH_TIE_HI -prefix TIE_ONE_
+step "insert_tiecells"
 repair_design
 step "repair_design"
 if {$do_timing} {

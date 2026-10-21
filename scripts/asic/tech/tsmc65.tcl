@@ -48,6 +48,9 @@ set TECH_ICG_TEST_PIN TE
 set TECH_DC_ZERO_WIRE_LOAD ZeroWireload
 # Reference 2-input NAND for gate-equivalent (GE) areas (thesis metrics)
 set TECH_NAND2_CELL ND2D1LVT
+# Tie cells driving the constants of the netlist repaired by OpenROAD
+set TECH_TIE_HI TIEHLVT/Z
+set TECH_TIE_LO TIELLVT/ZN
 
 proc _tsmc65_front_end {} {
   set root [asic_root TSMC65 "TSMC65 design kit"]

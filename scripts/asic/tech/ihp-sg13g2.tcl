@@ -19,6 +19,8 @@
 #   TECH_ICG_TEST_PIN            its test-enable pin, tied low (Yosys clockgate)
 #   TECH_DC_ZERO_WIRE_LOAD       zero wire-load model of the std-cell library (Design Compiler)
 #   TECH_NAND2_CELL              reference 2-input NAND, the unit of gate-equivalent areas
+#   TECH_TIE_HI, TECH_TIE_LO     tie-high/low cell and output pin, <cell>/<pin> (OpenROAD
+#                                insert_tiecells, for the constants of the Yosys netlist)
 #   tech_lef_files               LEF files for OpenROAD (technology/std cells first)
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #
@@ -103,6 +105,9 @@ set TECH_LIB2DB_DROP_CELLS {sg13g2_IOPadAnalog}
 set TECH_DC_ZERO_WIRE_LOAD Zero
 # Reference 2-input NAND for gate-equivalent (GE) areas (thesis metrics)
 set TECH_NAND2_CELL sg13g2_nand2_1
+# Tie cells driving the constants of the netlist repaired by OpenROAD
+set TECH_TIE_HI sg13g2_tiehi/L_HI
+set TECH_TIE_LO sg13g2_tielo/L_LO
 proc tech_lib2db_libs {} {
   return [concat [tech_stdcell_libs] [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]]
 }
