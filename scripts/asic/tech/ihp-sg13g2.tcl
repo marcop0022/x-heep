@@ -21,6 +21,7 @@
 #   TECH_NAND2_CELL              reference 2-input NAND, the unit of gate-equivalent areas
 #   TECH_TIE_HI, TECH_TIE_LO     tie-high/low cell and output pin, <cell>/<pin> (OpenROAD
 #                                insert_tiecells, for the constants of the Yosys netlist)
+#   TECH_BUF_CELL                buffer, input and output pin (Yosys insbuf before OpenROAD)
 #   tech_lef_files               LEF files for OpenROAD (technology/std cells first)
 #   tech_stdcell_libs            std-cell Liberty used for mapping (yosys)
 #
@@ -108,6 +109,8 @@ set TECH_NAND2_CELL sg13g2_nand2_1
 # Tie cells driving the constants of the netlist repaired by OpenROAD
 set TECH_TIE_HI sg13g2_tiehi/L_HI
 set TECH_TIE_LO sg13g2_tielo/L_LO
+# Buffer replacing the aliases (assign) of the netlist given to OpenROAD
+set TECH_BUF_CELL {sg13g2_buf_1 A X}
 proc tech_lib2db_libs {} {
   return [concat [tech_stdcell_libs] [_ihp_sg13g2_sram_libs] [_ihp_sg13g2_io_libs]]
 }

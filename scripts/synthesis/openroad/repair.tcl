@@ -6,15 +6,19 @@
 # run by run_repair.sh):
 #
 #   XHEEP_SYNTH_OUT=<Yosys output> XHEEP_REPAIR_OUT=<new output folder> \
+#     [XHEEP_REPAIR_NETLIST=<netlist of prep.tcl>] \
 #     openroad -no_init -no_splash -exit scripts/synthesis/openroad/repair.tcl
+#
+# The netlist is XHEEP_REPAIR_NETLIST (default: the Yosys netlist.v), the
+# technology, corner, clock period and constraints those of XHEEP_SYNTH_OUT.
 #
 # Design Compiler buffers high-fanout nets and optimizes the timing inside
 # compile_ultra; the open-source flow leaves this to physical design. This
 # step does it on the Yosys netlist before placement, with the libraries,
 # corner and constraints of the synthesis:
-#   insert_tiecells tie cells (TECH_TIE_LO/HI) for the constants: the Yosys
-#                   netlist has them as literals, which OpenROAD writes as
-#                   undriven zero_/one_ nets (Design Compiler uses tie cells too);
+#   insert_tiecells tie cells (TECH_TIE_LO/HI) for any constant left: OpenROAD
+#                   writes constants as undriven zero_/one_ nets (prep.tcl
+#                   already drives them with tie cells, as Design Compiler);
 #   repair_design   buffering/resizing for the library's max fanout,
 #                   transition and capacitance;
 #   repair_timing   setup-driven resizing, buffering, cloning
@@ -41,6 +45,10 @@ foreach v {XHEEP_SYNTH_OUT XHEEP_REPAIR_OUT} {
 }
 set in [file normalize $::env(XHEEP_SYNTH_OUT)]
 set out [file normalize $::env(XHEEP_REPAIR_OUT)]
+set netlist $in/netlist.v
+if {[info exists ::env(XHEEP_REPAIR_NETLIST)] && $::env(XHEEP_REPAIR_NETLIST) ne ""} {
+  set netlist [file normalize $::env(XHEEP_REPAIR_NETLIST)]
+}
 set do_timing [expr {![info exists ::env(XHEEP_REPAIR_TIMING)] || $::env(XHEEP_REPAIR_TIMING) ne "0"}]
 
 proc xh_read {path} {
@@ -67,7 +75,7 @@ puts "\[x-heep] OpenROAD repair of $in ($tech, corner [asic_corner])"
 foreach lef [tech_lef_files] { read_lef $lef }
 read_liberty [lindex [tech_stdcell_libs] 0]
 foreach lib [tech_yosys_macro_libs] { read_liberty $lib }
-read_verilog $in/netlist.v
+read_verilog $netlist
 link_design x_heep_system
 read_sdc $in/constraints.sdc
 # (the std-cell library's model: the IO Liberty may define one with the same name)

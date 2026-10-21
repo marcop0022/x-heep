@@ -376,7 +376,8 @@ asic-yosys: $(ASIC_PDK_DEP)
 	@work=$(call asic_work_dir,$(ASIC_YOSYS_TARGET_$(TECH)),yosys); \
 	sh scripts/synthesis/save_output.sh yosys $(TECH) "$$work" "$$work/yosys.log" --sta
 
-## OpenROAD electrical repair of a Yosys netlist (scripts/synthesis/openroad): repair_design and
+## OpenROAD electrical repair of a Yosys netlist (scripts/synthesis/openroad): Yosys flattens it with
+## tie cells and no assign (prep.tcl), then OpenROAD repair_design and
 ## repair_timing, with the libraries, corner and constraints of the synthesis, no wire load. The
 ## repaired netlist is a new synthesis output (output_yosys-or_<tech>_<date>), analysed with OpenSTA.
 ## @param TECH=[ihp-sg13g2(default),tsmc65]

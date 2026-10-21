@@ -51,6 +51,8 @@ set TECH_NAND2_CELL ND2D1LVT
 # Tie cells driving the constants of the netlist repaired by OpenROAD
 set TECH_TIE_HI TIEHLVT/Z
 set TECH_TIE_LO TIELLVT/ZN
+# Buffer replacing the aliases (assign) of the netlist given to OpenROAD
+set TECH_BUF_CELL {BUFFD1LVT I Z}
 
 proc _tsmc65_front_end {} {
   set root [asic_root TSMC65 "TSMC65 design kit"]
