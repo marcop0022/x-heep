@@ -436,8 +436,9 @@ asic-tech-db: $(ASIC_PDK_DEP)
 	mkdir -p $(BUILD_DIR)/tech_db
 	cd $(BUILD_DIR)/tech_db && ASIC_TECH_TCL=$(mkfile_path)/scripts/asic/tech/$(TECH).tcl lc_shell -f $(mkfile_path)/scripts/asic/lib2db.tcl 2>&1 | tee lib2db-$(TECH).log
 
-## Synthesis campaign of the tool/technology comparison (scripts/synthesis/thesis_runs.sh): asic-yosys and
-## asic-dc (+ OpenSTA on the DC netlist) for every technology, with the same clock period and corner.
+## Synthesis campaign of the tool/technology comparison (scripts/synthesis/thesis_runs.sh): asic-yosys,
+## asic-yosys-repair and asic-dc (+ OpenSTA on the DC netlist) for every technology, with the same clock
+## period and corner.
 ## Outputs linked, runs.txt, metrics.csv and campaign.log in implementation/campaigns/<date>_<git describe>.
 ## @param THESIS_TECHS="ihp-sg13g2 tsmc65"(default)
 ## @param THESIS_TOOLS="yosys yosys-or dc"(default; yosys-or: OpenROAD repair of the Yosys netlist, needs OPENROAD)
@@ -455,6 +456,16 @@ thesis-metrics:
 	if [ -z "$$outs" ]; then c=$$(ls -dt implementation/campaigns/*/ 2>/dev/null | head -n 1); outs=$$(ls -d $${c}yosys_* $${c}yosys-or_* $${c}dc_* 2>/dev/null); fi; \
 	test -n "$$outs" || { echo "ERROR: no synthesis output: set SYNTH_OUTS or run 'make thesis-runs'"; exit 1; }; \
 	tclsh scripts/synthesis/extract_metrics.tcl $$outs > $(METRICS_CSV) && echo "Metrics in $(METRICS_CSV)"
+
+## Gate-level simulation of the netlists of a campaign (scripts/synthesis/thesis_sims.sh), one at a time:
+## firmware THESIS_SIM_APP (flash_load) with QuestaSim, with Verilator if QuestaSim crashes. sims.txt
+## (PASS/FAIL per netlist) and sims/ (logs, UART output) in the campaign folder.
+## @param CAMPAIGN=<campaign folder> (default: the latest implementation/campaigns/*)
+## @param THESIS_SIM_NETLISTS="<tool>_<tech> ..." (default: all the netlists of the campaign)
+## @param THESIS_SIM_APP=hello_world(default)
+## @param THESIS_SIM_TIMEOUT=<per simulation> (default 60m)
+thesis-sims:
+	@sh scripts/synthesis/thesis_sims.sh $(CAMPAIGN)
 
 ## @section Post-synthesis Simulation
 ## Questasim post-synthesis (gate-level) simulation build of the latest `make asic-yosys` or `make asic-dc` netlist.
