@@ -440,6 +440,16 @@ thesis-metrics:
 	test -n "$$outs" || { echo "ERROR: no synthesis output: set SYNTH_OUTS or run 'make thesis-runs'"; exit 1; }; \
 	tclsh scripts/synthesis/extract_metrics.tcl $$outs > $(METRICS_CSV) && echo "Metrics in $(METRICS_CSV)"
 
+## Gate-level simulation of the netlists of a campaign (scripts/synthesis/thesis_sims.sh), one at a time:
+## firmware THESIS_SIM_APP (flash_load) with QuestaSim, with Verilator if QuestaSim crashes. sims.txt
+## (PASS/FAIL per netlist) and sims/ (logs, UART output) in the campaign folder.
+## @param CAMPAIGN=<campaign folder> (default: the latest implementation/campaigns/*)
+## @param THESIS_SIM_NETLISTS="<tool>_<tech> ..." (default: all the netlists of the campaign)
+## @param THESIS_SIM_APP=hello_world(default)
+## @param THESIS_SIM_TIMEOUT=<per simulation> (default 60m)
+thesis-sims:
+	@sh scripts/synthesis/thesis_sims.sh $(CAMPAIGN)
+
 ## @section Post-synthesis Simulation
 ## Questasim post-synthesis (gate-level) simulation build of the latest `make asic-yosys` or `make asic-dc` netlist.
 questasim-build-postsynth:
