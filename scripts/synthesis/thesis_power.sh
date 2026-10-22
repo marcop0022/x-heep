@@ -25,7 +25,9 @@
 # Environment: THESIS_POWER_NETLISTS (default: every <tool>_<tech> link of the
 # campaign), THESIS_POWER_APP (default hello_world), THESIS_POWER_TIMEOUT
 # (default 90m per simulation), THESIS_POWER_KEEP_SAIF (default 1: keep the
-# SAIF, gzipped; 0: delete it), POSTSYNTH_MAX_CYCLES, plus QuestaSim (vsim,
+# SAIF, gzipped; 0: delete it), THESIS_POWER_REUSE_SAIF (default 0; 1: analyse
+# the SAIF kept by a previous run, if any, instead of simulating again; its
+# firmware is then the one of that run), POSTSYNTH_MAX_CYCLES, plus QuestaSim (vsim,
 # MODEL_TECH), OpenSTA (sta), Design Compiler (dc_shell, optional), PDK_XHEEP, TSMC65.
 
 camp=${1:-$(ls -dt implementation/campaigns/*/ 2>/dev/null | head -n 1)}
@@ -34,6 +36,7 @@ make=${MAKE:-make}
 app=${THESIS_POWER_APP:-hello_world}
 tmo=${THESIS_POWER_TIMEOUT:-90m}
 keep=${THESIS_POWER_KEEP_SAIF:-1}
+reuse=${THESIS_POWER_REUSE_SAIF:-0}
 cycles=${POSTSYNTH_MAX_CYCLES:-5000000}
 scope=tb_top/testharness_i/x_heep_system_i
 SYNTH_DIR=implementation/synthesis
@@ -136,16 +139,20 @@ for n in $names; do
   t0=$(date +%s)
   rm -f "$pw/$n".*.csv
   res=PASS; info=""
-  if ! note=$(simulate "$n"); then
+  if [ "$reuse" = 1 ] && [ -s "$pw/$n.saif.gz" ]; then
+    gzip -dc "$pw/$n.saif.gz" > "$pw/$n.saif"
+    info="(SAIF reused)"
+  elif ! note=$(simulate "$n"); then
     res=FAIL; info=$note
-  else
+  fi
+  if [ "$res" = PASS ]; then
     XHEEP_SYNTH_OUT=$out XHEEP_SAIF=$pw/$n.saif XHEEP_SAIF_SCOPE=$scope \
       XHEEP_POWER_RPT=$pw/$n.opensta.rpt XHEEP_POWER_CSV=$pw/$n.opensta.csv XHEEP_POWER_NAME=$n \
       sta -no_init -no_splash -exit scripts/synthesis/opensta/saif_power.tcl > "$pw/$n.opensta.log" 2>&1
     if grep -q 'OpenSTA power done' "$pw/$n.opensta.log"; then
-      info=$(sed -n 's/^\[x-heep\] power-summary //p' "$pw/$n.opensta.log")
+      info="$info $(sed -n 's/^\[x-heep\] power-summary //p' "$pw/$n.opensta.log")"
     else
-      res=FAIL; info="OpenSTA failed, see $n.opensta.log"
+      res=FAIL; info="$info OpenSTA failed, see $n.opensta.log"
     fi
     if [ "$dc" = 1 ] && [ "$(cat "$out/synth_tool" 2>/dev/null)" = dc ]; then
       wd=$pw/$n.dc_work

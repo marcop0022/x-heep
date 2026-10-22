@@ -459,6 +459,7 @@ thesis-sims:
 ## @param THESIS_POWER_APP=hello_world(default)
 ## @param THESIS_POWER_TIMEOUT=<per simulation> (default 90m)
 ## @param THESIS_POWER_KEEP_SAIF=[1(default, gzipped),0]
+## @param THESIS_POWER_REUSE_SAIF=[0(default),1: analyse the SAIF of a previous run instead of simulating]
 thesis-power:
 	@sh scripts/synthesis/thesis_power.sh $(CAMPAIGN)
 

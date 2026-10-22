@@ -71,8 +71,11 @@ read_verilog $out/netlist.v
 link_design $top
 read_sdc $out/constraints.sdc
 
-# The top-level ports: OpenSTA's own reader
-read_saif -scope $scope $saif
+# OpenSTA's own reader (it may stop at a name it cannot parse, as on the Yosys
+# netlists: the top-level ports are annotated again below)
+if {[catch {read_saif -scope $scope $saif} err]} {
+  puts "\[x-heep] WARNING: read_saif: $err"
+}
 
 # The SAIF nets below the scope: "<instance path>/<net>" -> {T0 T1 TC}
 # (the nets of the cell simulation models are skipped)
@@ -108,6 +111,19 @@ set clk [lindex [all_clocks] 0]
 set per [get_property $clk period]
 set ncycles [expr {$dur_ns / $per}]
 puts "\[x-heep] SAIF: [dict size $nets] nets, [format %.0f $ncycles] cycles of [get_full_name $clk] ($per ns)"
+
+# The top-level input ports
+set nports 0
+foreach port [get_ports *] {
+  if {[catch {get_property $port direction} d] || $d ni {input inout bidirect}} { continue }
+  set key [get_full_name $port]
+  if {![dict exists $nets $key]} { continue }
+  lassign [dict get $nets $key] t0 t1 tc
+  set duty [expr {($t0 + $t1) > 0 ? double($t1) / ($t0 + $t1) : 0.5}]
+  set_power_activity -input_ports $port -activity [expr {$tc / $ncycles}] -duty $duty
+  incr nports
+}
+puts "\[x-heep] input ports annotated from the SAIF: $nports"
 
 # The SAIF entry of a net, also through the module ports (a port net is looked
 # up again by the net that connects the port in the parent module)
@@ -195,6 +211,7 @@ puts $f "Date   : [clock format [clock seconds]]"
 puts $f "****************************************\n"
 puts $f "Netlist: $out"
 puts $f "SAIF: $saif ([format %.0f $ncycles] cycles of $per ns)"
+puts $f "Input ports annotated from the SAIF: $nports"
 puts $f "Driver pins annotated from the SAIF: $found ($climbed through module ports), not found: $missing"
 puts $f "Pins tied to a constant: $nconst, undriven or X: $nother (no activity)\n"
 puts $f $text
@@ -210,5 +227,5 @@ foreach line [split $text \n] {
 }
 close $csv
 if {$total eq ""} { error "\[x-heep] no Total row in the power report" }
-puts "\[x-heep] power-summary cycles=[format %.0f $ncycles] annotated=$found notfound=$missing constants=$nconst opensta_mw=[format %.3f [expr {$total * 1e3}]]"
+puts "\[x-heep] power-summary cycles=[format %.0f $ncycles] ports=$nports annotated=$found notfound=$missing constants=$nconst opensta_mw=[format %.3f [expr {$total * 1e3}]]"
 puts "\[x-heep] OpenSTA power done"
