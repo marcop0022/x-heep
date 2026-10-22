@@ -450,6 +450,18 @@ thesis-metrics:
 thesis-sims:
 	@sh scripts/synthesis/thesis_sims.sh $(CAMPAIGN)
 
+## Power of the netlists of a campaign with the switching activity of a gate-level simulation
+## (scripts/synthesis/thesis_power.sh), one at a time: QuestaSim runs THESIS_POWER_APP (flash_load) and
+## writes a SAIF, OpenSTA computes the power of every netlist with it (Design Compiler too on the DC
+## netlists, as a cross-check). power.txt, power.csv and power/ (reports, logs, SAIF) in the campaign folder.
+## @param CAMPAIGN=<campaign folder> (default: the latest implementation/campaigns/*)
+## @param THESIS_POWER_NETLISTS="<tool>_<tech> ..." (default: all the netlists of the campaign)
+## @param THESIS_POWER_APP=hello_world(default)
+## @param THESIS_POWER_TIMEOUT=<per simulation> (default 90m)
+## @param THESIS_POWER_KEEP_SAIF=[1(default, gzipped),0]
+thesis-power:
+	@sh scripts/synthesis/thesis_power.sh $(CAMPAIGN)
+
 ## @section Post-synthesis Simulation
 ## Questasim post-synthesis (gate-level) simulation build of the latest `make asic-yosys` or `make asic-dc` netlist.
 questasim-build-postsynth:
