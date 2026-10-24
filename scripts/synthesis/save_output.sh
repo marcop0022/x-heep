@@ -8,7 +8,8 @@
 # implementation/synthesis/last_output (read by the post-synthesis simulations):
 #   netlist.v, netlist_sim.v (modules prefixed for simulation), *.rpt,
 #   constraints.sdc, <tool>.log, asic_tech, asic_corner, asic_clk_period, synth_tool,
-#   asic_abc_sizing (Yosys only: $ASIC_ABC_SIZING, 1 if ABC buffered and sized the cells),
+#   asic_abc_sizing (Yosys only: $ASIC_ABC_SIZING, 1 if ABC buffered and sized the cells,
+#   and the options of its `buffer` command, $ASIC_ABC_BUFFER_OPTS, if any),
 #   git_commit (the commit of the flow, "(modified)" if tracked files had changes)
 # With --sta, then runs the OpenSTA reports (scripts/synthesis/opensta/run_sta.sh).
 #
@@ -37,7 +38,7 @@ echo "$tech" > "$out/asic_tech"
 echo "$tool" > "$out/synth_tool"
 echo "${ASIC_CLK_PERIOD:-}" > "$out/asic_clk_period"
 echo "${ASIC_CORNER:-worst}" > "$out/asic_corner"
-[ "$tool" = yosys ] && echo "${ASIC_ABC_SIZING:-0}" > "$out/asic_abc_sizing"
+[ "$tool" = yosys ] && echo "${ASIC_ABC_SIZING:-0}${ASIC_ABC_BUFFER_OPTS:+ (buffer $ASIC_ABC_BUFFER_OPTS)}" > "$out/asic_abc_sizing"
 commit=$(git describe --always --tags 2>/dev/null || echo unknown)
 git diff --quiet HEAD -- 2>/dev/null || commit="$commit (modified)"
 echo "$commit" > "$out/git_commit"

@@ -138,6 +138,21 @@ if {[asic_env ASIC_ABC_SIZING] eq "1" && [info exists TECH_ABC_DRIVING_CELL] && 
 	puts $constr "set_load $TECH_ABC_LOAD_FF"
 	close $constr
 	lappend abc_args -constr [file normalize abc.constr]
+	# Options of ABC's `buffer` ($ASIC_ABC_BUFFER_OPTS, e.g. "-p -N 8": also buffer
+	# the primary inputs of each module, i.e. its input ports and the outputs of
+	# its flip-flops, with the max fanout of the library). The script is ABC's
+	# default one with -liberty, -constr and -D, with these options added to `buffer`
+	set buffer_opts [asic_env ASIC_ABC_BUFFER_OPTS]
+	if {$buffer_opts ne ""} {
+		if {$abc_delay eq ""} { error "\[x-heep] ASIC_ABC_BUFFER_OPTS needs a clock (ABC delay target)" }
+		set d $abc_delay
+		set script [list strash "&get -n" "&fraig -x" "&put" scorr dc2 dretime "retime -o -D $d" \
+			strash "&get -n" "&dch -f" "&nf -D $d" "&put" "buffer $buffer_opts" \
+			"upsize -D $d" "dnsize -D $d" "stime -p"]
+		# Inline script: commands separated by ';', blanks written as ','
+		lappend abc_args -script "+[string map {" " ","} [join $script ";"]]"
+		puts "\[x-heep] ABC buffer options: $buffer_opts"
+	}
 }
 
 yosys synth -top $synth_top -run :fine
