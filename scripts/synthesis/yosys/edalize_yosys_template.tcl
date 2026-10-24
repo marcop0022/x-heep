@@ -154,6 +154,12 @@ if {[asic_env ASIC_ABC_SIZING] eq "1" && [info exists TECH_ABC_DRIVING_CELL] && 
 		puts "\[x-heep] ABC buffer options: $buffer_opts"
 	}
 }
+# Keep ABC's temporary directory of every module, with its input network and
+# script, and print its path in the log (to debug ABC: see abc_bisect.sh)
+if {[asic_env ASIC_ABC_KEEP_TMP] eq "1"} {
+	lappend abc_args -nocleanup -showtmp
+	puts "\[x-heep] ABC temporary directories kept"
+}
 
 yosys synth -top $synth_top -run :fine
 # Word-level operators (adders, multipliers, comparators, ...) before their
