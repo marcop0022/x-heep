@@ -15,7 +15,7 @@
 #
 # Environment: THESIS_TECHS (default "ihp-sg13g2 tsmc65"), THESIS_TOOLS
 # (default "yosys dc"), plus those of the flows (ASIC_CLK_PERIOD, ASIC_CORNER,
-# TSMC65, ...).
+# ASIC_ABC_SIZING, ASIC_ABC_BUFFER_OPTS, TSMC65, ...).
 
 techs=${THESIS_TECHS:-"ihp-sg13g2 tsmc65"}
 tools=${THESIS_TOOLS:-"yosys dc"}
@@ -30,7 +30,7 @@ fi
 camp=implementation/campaigns/$(date +%Y_%m_%d_%H-%M)_$version
 mkdir -p "$camp"
 log=$camp/campaign.log
-echo "Campaign $camp: techs '$techs', tools '$tools', clk period '${ASIC_CLK_PERIOD:-SDC default}', corner '${ASIC_CORNER:-worst}'" | tee "$log"
+echo "Campaign $camp: techs '$techs', tools '$tools', clk period '${ASIC_CLK_PERIOD:-SDC default}', corner '${ASIC_CORNER:-worst}', ABC sizing '${ASIC_ABC_SIZING:-0}${ASIC_ABC_BUFFER_OPTS:+, buffer $ASIC_ABC_BUFFER_OPTS}'" | tee "$log"
 
 latest() { ls -dt $SYNTH_DIR/output_$1_$2_* 2>/dev/null | head -n 1; }
 
