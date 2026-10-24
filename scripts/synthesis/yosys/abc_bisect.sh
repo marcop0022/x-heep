@@ -14,23 +14,27 @@
 # Usage: abc_bisect.sh <ABC temporary directory> [<timeout per run>, default 10m]
 # Environment: YOSYS_ABC (default yosys-abc)
 
-dir=${1%/}
 tmo=${2:-10m}
 abc=${YOSYS_ABC:-yosys-abc}
-if [ -z "$dir" ] || [ ! -f "$dir/abc.script" ]; then
-  echo "ERROR: no abc.script in '$dir'"
+if [ -z "$1" ] || [ ! -f "$1/abc.script" ]; then
+  echo "ERROR: no abc.script in '$1'"
   exit 1
 fi
+dir=$(cd "$1" && pwd)
+# The script names its files relative to the directory Yosys ran in (with
+# -nocleanup the temporary directories are created there): run ABC from it
+wd=$(dirname "$dir")
 
 cmds=$dir/bisect.cmds
-tr ';' '\n' < "$dir/abc.script" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' > "$cmds"
+# (without the `echo + <command>` lines Yosys adds before every command)
+tr ';' '\n' < "$dir/abc.script" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v -e '^$' -e '^echo ' > "$cmds"
 n=$(wc -l < "$cmds")
 echo "ABC script of $dir: $n commands"
 
 # run <file with commands>: ABC on them, joined with ';'; prints the exit status
 run() {
   script=$(paste -sd ';' "$1")
-  (cd "$dir" && timeout -k 10 "$tmo" "$abc" -c "$script" > "$dir/bisect.log" 2>&1)
+  (cd "$wd" && timeout -k 10 "$tmo" "$abc" -c "$script" > "$dir/bisect.log" 2>&1)
   echo $?
 }
 

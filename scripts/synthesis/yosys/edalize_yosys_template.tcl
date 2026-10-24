@@ -128,9 +128,9 @@ file copy -force $sdc_file report/constraints.sdc
 set abc_args [list -liberty $stdcell_lib]
 if {$abc_delay ne ""} { lappend abc_args -D $abc_delay }
 # ABC buffering and gate sizing after mapping (buffer, upsize, dnsize), with the
-# input driver and output load of the tech file: off unless ASIC_ABC_SIZING=1.
-# On TSMC65 ABC crashes in it (segfault on the 64-bit minstret counter), so
-# it is off for every technology, to keep the flows comparable.
+# input driver and output load of the tech file: off unless ASIC_ABC_SIZING=1
+# (off in the thesis-data-A campaign: on TSMC65 ABC crashed in it, a segfault
+# on the 64-bit minstret counter, avoided by TECH_ABC_DONT_USE).
 if {[asic_env ASIC_ABC_SIZING] eq "1" && [info exists TECH_ABC_DRIVING_CELL] && [info exists TECH_ABC_LOAD_FF]} {
 	puts "\[x-heep] ABC buffering and gate sizing: on"
 	set constr [open abc.constr w]
@@ -138,6 +138,11 @@ if {[asic_env ASIC_ABC_SIZING] eq "1" && [info exists TECH_ABC_DRIVING_CELL] && 
 	puts $constr "set_load $TECH_ABC_LOAD_FF"
 	close $constr
 	lappend abc_args -constr [file normalize abc.constr]
+	# Cells that make ABC's timer crash (tech file)
+	if {[info exists TECH_ABC_DONT_USE]} {
+		foreach c $TECH_ABC_DONT_USE { lappend abc_args -dont_use $c }
+		puts "\[x-heep] ABC does not use: $TECH_ABC_DONT_USE"
+	}
 	# Options of ABC's `buffer` ($ASIC_ABC_BUFFER_OPTS, e.g. "-p -N 8": also buffer
 	# the primary inputs of each module, i.e. its input ports and the outputs of
 	# its flip-flops, with the max fanout of the library). The script is ABC's

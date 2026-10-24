@@ -38,6 +38,11 @@ set TECH_SIM_VLOG_FLAGS {+define+UNIT_DELAY=0 +define+no_warning}
 
 set TECH_ABC_DRIVING_CELL BUFFD4LVT
 set TECH_ABC_LOAD_FF 6.0
+# Cells ABC must not map onto when it buffers and sizes (ASIC_ABC_SIZING=1):
+# with these carry-select half adders in the mapping, ABC's timer (stime, and
+# so buffer/upsize/dnsize) crashes with a segmentation fault (seen on the CPU's
+# 64-bit minstret counter; scripts/synthesis/yosys/abc_bisect.sh)
+set TECH_ABC_DONT_USE {HCOSCIND1LVT HCOSCIND2LVT HCOSCOND1LVT HCOSCOND2LVT}
 set TECH_CLOCK_GATE_CELLS {CKLNQD* CKLHQD*}
 # Integrated clock-gating cell inserted by Yosys and Design Compiler, as in
 # polheepo (and in the clock-gate wrapper, hw/asic/tsmc65/rtl/prim_tsmc65_clk.sv)

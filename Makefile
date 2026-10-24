@@ -369,7 +369,7 @@ pdk:
 ## @param ASIC_CORNER=[worst(default),typ] (library corner, the same for every tool)
 ## @param PDK_XHEEP=<PDK root, containing ihp-sg13g2/> (default hw/asic/pdk)
 ## @param ASIC_CLK_PERIOD=<clk_i period in ns> (default 20)
-## @param ASIC_ABC_SIZING=[0(default),1] (ABC buffering and gate sizing; crashes on tsmc65)
+## @param ASIC_ABC_SIZING=[0(default),1] (ABC buffering and gate sizing; on tsmc65 without the cells of TECH_ABC_DONT_USE)
 ## @param ASIC_ABC_BUFFER_OPTS=<options of ABC's buffer, with ASIC_ABC_SIZING=1> (e.g. "-p -N 8": also buffer module inputs and flip-flop outputs, max fanout 8)
 ## @param ASIC_ABC_KEEP_TMP=[0(default),1] (keep ABC's temporary directories, for scripts/synthesis/yosys/abc_bisect.sh)
 asic-yosys: $(ASIC_PDK_DEP)
