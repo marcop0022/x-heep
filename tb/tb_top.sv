@@ -11,9 +11,9 @@ module tb_top #(
   // comment to record execution trace
   //`define TRACE_EXECUTION
 
-  const time CLK_PHASE_HI = 5ns;
-  const time CLK_PHASE_LO = 5ns;
-  localparam CLK_FREQUENCY_KHz = 100_000;
+  const time CLK_PHASE_HI = 10ns;
+  const time CLK_PHASE_LO = 10ns;
+  localparam CLK_FREQUENCY_KHz = 50_000;
   const time CLK_PERIOD = CLK_PHASE_HI + CLK_PHASE_LO;
 
   const time STIM_APPLICATION_DEL = CLK_PERIOD * 0.1;
