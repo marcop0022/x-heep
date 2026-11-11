@@ -71,32 +71,21 @@ read_verilog $out/netlist.v
 link_design $top
 read_sdc $out/constraints.sdc
 
-# The clock is moved from the clk_i port to the core-side output of its pad
-# (pad_ring_i/u_pad_clk), with the same name and period. On TSMC65 the clock pad
-# is a bidirectional cell, which OpenSTA's clock network does not cross: the
-# clock pins inside got the SAIF activity, but with the slews computed on the
-# unbuffered (pre-CTS) clock nets, while on IHP they are ideal. From the pad
-# output the clock network is the same in both technologies: ideal (zero slew)
-# and, as OpenSTA does for every clock network pin, with the activity of the
-# clock (2 transitions per period), not the one of the SAIF, i.e. without the
-# clock gating. (A virtual clock, with no network at all, gives the SAIF
-# activity but the pre-CTS slews on every clock pin: OpenSTA cannot set the
-# slew of a pin, and the power of the IHP netlists doubled.)
-# XHEEP_POWER_CLK_AT_PAD=0 keeps the clock on the port.
-set clk_at_pad [expr {![info exists ::env(XHEEP_POWER_CLK_AT_PAD)] || $::env(XHEEP_POWER_CLK_AT_PAD) ne "0"}]
-if {$clk_at_pad} {
-  set padc {}
-  foreach p [get_pins -quiet pad_ring_i/u_pad_clk/*/*] {
-    if {![catch {get_property $p direction} d] && $d eq "output"} { lappend padc $p }
-  }
-  if {[llength $padc] != 1} { error "\[x-heep] clock pad output not found: '$padc'" }
-  set padc [lindex $padc 0]
+# With XHEEP_POWER_VCLK=1 the clock is replaced by a virtual clock with the
+# same name and period: the period still scales the activities, but without a
+# source pin OpenSTA builds no clock network. Otherwise every pin of the clock
+# network (through the clock gates, up to the flip-flops) takes the activity of
+# the ideal clock, 2 transitions per period, whatever the SAIF says, i.e.
+# ignoring the clock gating (on TSMC65 the clock does not cross the
+# bidirectional pad, so there is no clock network there anyway).
+set vclk [expr {[info exists ::env(XHEEP_POWER_VCLK)] && $::env(XHEEP_POWER_VCLK) eq "1"}]
+if {$vclk} {
   set c0 [lindex [all_clocks] 0]
   set cname [get_full_name $c0]
   set cper [get_property $c0 period]
   if {[catch {delete_clock $c0} err]} { error "\[x-heep] delete_clock: $err" }
-  create_clock -name $cname -period $cper $padc
-  puts "\[x-heep] clock $cname ($cper ns) at the clock pad output [get_full_name $padc]"
+  create_clock -name $cname -period $cper
+  puts "\[x-heep] virtual clock $cname ($cper ns): no clock network"
 }
 
 # OpenSTA's own reader (it may stop at a name it cannot parse, as on the Yosys
@@ -248,7 +237,7 @@ puts $f "SAIF: $saif ([format %.0f $ncycles] cycles of $per ns)"
 puts $f "Input ports annotated from the SAIF: $nports"
 puts $f "Driver pins annotated from the SAIF: $found ($climbed through module ports), not found: $missing"
 puts $f "Pins tied to a constant: $nconst, undriven or X: $nother (no activity)"
-puts $f "Pins with the activity of the ideal clock (not from the SAIF): $nclkpins[expr {$clk_at_pad ? { (clock at the pad output)} : {}}]\n"
+puts $f "Pins with the activity of the ideal clock (not from the SAIF): $nclkpins[expr {$vclk ? { (virtual clock)} : {}}]\n"
 puts $f $text
 close $f
 
@@ -262,5 +251,5 @@ foreach line [split $text \n] {
 }
 close $csv
 if {$total eq ""} { error "\[x-heep] no Total row in the power report" }
-puts "\[x-heep] power-summary cycles=[format %.0f $ncycles] ports=$nports annotated=$found notfound=$missing constants=$nconst clockpins=$nclkpins clk_at_pad=$clk_at_pad opensta_mw=[format %.3f [expr {$total * 1e3}]]"
+puts "\[x-heep] power-summary cycles=[format %.0f $ncycles] ports=$nports annotated=$found notfound=$missing constants=$nconst clockpins=$nclkpins vclk=$vclk opensta_mw=[format %.3f [expr {$total * 1e3}]]"
 puts "\[x-heep] OpenSTA power done"
