@@ -71,6 +71,23 @@ read_verilog $out/netlist.v
 link_design $top
 read_sdc $out/constraints.sdc
 
+# With XHEEP_POWER_VCLK=1 the clock is replaced by a virtual clock with the
+# same name and period: the period still scales the activities, but without a
+# source pin OpenSTA builds no clock network. Otherwise every pin of the clock
+# network (through the clock gates, up to the flip-flops) takes the activity of
+# the ideal clock, 2 transitions per period, whatever the SAIF says, i.e.
+# ignoring the clock gating (on TSMC65 the clock does not cross the
+# bidirectional pad, so there is no clock network there anyway).
+set vclk [expr {[info exists ::env(XHEEP_POWER_VCLK)] && $::env(XHEEP_POWER_VCLK) eq "1"}]
+if {$vclk} {
+  set c0 [lindex [all_clocks] 0]
+  set cname [get_full_name $c0]
+  set cper [get_property $c0 period]
+  if {[catch {delete_clock $c0} err]} { error "\[x-heep] delete_clock: $err" }
+  create_clock -name $cname -period $cper
+  puts "\[x-heep] virtual clock $cname ($cper ns): no clock network"
+}
+
 # OpenSTA's own reader (it may stop at a name it cannot parse, as on the Yosys
 # netlists: the top-level ports are annotated again below)
 if {[catch {read_saif -scope $scope $saif} err]} {
@@ -177,12 +194,18 @@ foreach k $examples { puts "\[x-heep]   not found: $k" }
 # undriven). Collected first, then annotated (every annotation invalidates
 # the activities)
 set todo {}
+set nclkpins 0
 foreach cell [get_cells -hierarchical *] {
   if {[catch {get_property $cell liberty_cell} lc] || $lc eq ""} { continue }
   foreach pin [get_pins -of_objects $cell] {
-    if {![catch {get_property $pin activity} a] && [lindex $a end] eq "input"} { lappend todo $pin }
+    if {[catch {get_property $pin activity} a]} { continue }
+    switch -- [lindex $a end] {
+      input { lappend todo $pin }
+      clock { incr nclkpins }
+    }
   }
 }
+puts "\[x-heep] pins with the activity of the ideal clock (not from the SAIF): $nclkpins"
 set nconst 0
 set nother 0
 foreach pin $todo {
@@ -213,7 +236,8 @@ puts $f "Netlist: $out"
 puts $f "SAIF: $saif ([format %.0f $ncycles] cycles of $per ns)"
 puts $f "Input ports annotated from the SAIF: $nports"
 puts $f "Driver pins annotated from the SAIF: $found ($climbed through module ports), not found: $missing"
-puts $f "Pins tied to a constant: $nconst, undriven or X: $nother (no activity)\n"
+puts $f "Pins tied to a constant: $nconst, undriven or X: $nother (no activity)"
+puts $f "Pins with the activity of the ideal clock (not from the SAIF): $nclkpins[expr {$vclk ? { (virtual clock)} : {}}]\n"
 puts $f $text
 close $f
 
@@ -227,5 +251,5 @@ foreach line [split $text \n] {
 }
 close $csv
 if {$total eq ""} { error "\[x-heep] no Total row in the power report" }
-puts "\[x-heep] power-summary cycles=[format %.0f $ncycles] ports=$nports annotated=$found notfound=$missing constants=$nconst opensta_mw=[format %.3f [expr {$total * 1e3}]]"
+puts "\[x-heep] power-summary cycles=[format %.0f $ncycles] ports=$nports annotated=$found notfound=$missing constants=$nconst clockpins=$nclkpins vclk=$vclk opensta_mw=[format %.3f [expr {$total * 1e3}]]"
 puts "\[x-heep] OpenSTA power done"
